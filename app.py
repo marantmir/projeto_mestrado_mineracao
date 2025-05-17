@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from wordcloud import WordCloud
+import plotly.graph_objects as go
 import matplotlib.pyplot as plt
+from wordcloud import WordCloud
 
 from utils.spotify_data import coletar_dados_spotify
 from utils.youtube_data import coletar_dados_youtube
@@ -11,16 +12,18 @@ from utils.associacoes import gerar_associacoes
 from utils.visualizacoes import gerar_visualizacoes
 from utils.filtros import aplicar_filtros
 
+# Configuração inicial da página
 st.set_page_config(page_title="Radar Cultural Inteligente", layout="wide")
 st.title("🎧 Radar Cultural Inteligente")
 st.markdown("Descubra tendências de temas e sentimentos a partir de dados reais do Spotify e YouTube para criar conteúdos que engajam!")
 
 # Filtros personalizados
-st.sidebar.header("🎯 Filtros Personalizados")
-pais = st.sidebar.selectbox("País", ["Todos", "Brasil", "EUA", "Reino Unido", "Canadá", "Outros"])
-regiao = st.sidebar.selectbox("Região", ["Todas", "Norte", "Nordeste", "Centro-Oeste", "Sudeste", "Sul"])
-faixa_etaria = st.sidebar.selectbox("Faixa Etária", ["Todas", "13-17", "18-24", "25-34", "35-44", "45+"])
-genero = st.sidebar.selectbox("Gênero", ["Todos", "Masculino", "Feminino", "Outros"])
+with st.sidebar:
+    st.header("🎯 Filtros Personalizados")
+    pais = st.selectbox("País", ["Todos", "Brasil", "EUA", "Reino Unido", "Canadá", "Outros"])
+    regiao = st.selectbox("Região", ["Todas", "Norte", "Nordeste", "Centro-Oeste", "Sudeste", "Sul"])
+    faixa_etaria = st.selectbox("Faixa Etária", ["Todas", "13-17", "18-24", "25-34", "35-44", "45+"])
+    genero = st.selectbox("Gênero", ["Todos", "Masculino", "Feminino", "Outros"])
 
 # Coleta de dados
 with st.spinner("🔍 Coletando dados do Spotify..."):
@@ -32,7 +35,7 @@ with st.spinner("🔍 Coletando dados do YouTube..."):
 df_spotify["fonte"] = "Spotify"
 df_youtube["fonte"] = "YouTube"
 
-# Unificação e tratamento de colunas obrigatórias
+# Simula colunas ausentes para compatibilidade
 colunas_simuladas = {
     "pais": "Brasil",
     "regiao": "Sudeste",
@@ -60,39 +63,77 @@ with st.spinner("🧠 Analisando sentimentos..."):
 with st.spinner("🔗 Detectando tendências e associações..."):
     associacoes, temas = gerar_associacoes(df_dados_filtrado)
 
-# Visualizações amigáveis para leigos
-st.subheader("📈 Tendências Atuais para Seu Público")
-gerar_visualizacoes(df_dados_filtrado, associacoes, temas)
+# Abas para melhor navegação
+aba_tendencias, aba_sentimentos, aba_nuvem, aba_mapa = st.tabs([
+    "📊 Tendências Gerais", "😊 Sentimentos", "☁️ Nuvem de Palavras", "🗺️ Mapa de Regiões"
+])
 
-# Gráfico de sentimentos
-if "sentimento" in df_dados_filtrado.columns:
-    st.markdown("### 💬 Distribuição de Sentimentos nos Conteúdos")
-    sentimento_fig = px.histogram(df_dados_filtrado, x="sentimento", color="fonte",
-                                  barmode="group", text_auto=True,
-                                  labels={"sentimento": "Sentimento Detectado"},
-                                  title="Frequência de Sentimentos por Fonte")
-    st.plotly_chart(sentimento_fig, use_container_width=True)
+# Aba de tendências gerais
+with aba_tendencias:
+    st.subheader("📈 Tendências Atuais para Seu Público")
+    gerar_visualizacoes(df_dados_filtrado, associacoes, temas)
 
-# Nuvem de palavras com base nos temas
-if temas:
+    # Exibir tabela de temas e associações de forma visualmente clara
+    st.markdown("### 🔍 Temas Mais Comuns")
+    df_temas_freq = pd.Series(temas).value_counts().reset_index()
+    df_temas_freq.columns = ["Tema", "Frequência"]
+    st.dataframe(df_temas_freq.style.background_gradient(cmap="Blues"), use_container_width=True)
+
+# Aba de sentimentos
+with aba_sentimentos:
+    st.markdown("### 💬 Distribuição de Sentimentos por Fonte e Tema")
+
+    if "sentimento" in df_dados_filtrado.columns and "tema" in df_dados_filtrado.columns:
+        fig = px.histogram(
+            df_dados_filtrado,
+            x="tema",
+            color="sentimento",
+            facet_col="fonte",
+            barmode="group",
+            text_auto=True,
+            labels={"tema": "Temas", "count": "Quantidade"},
+            title="Sentimentos por Tema nas Fontes (Spotify vs YouTube)"
+        )
+        fig.update_layout(showlegend=True)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("Dados insuficientes para análise de sentimento por tema.")
+
+# Aba de nuvem de palavras
+with aba_nuvem:
     st.markdown("### ☁️ Nuvem de Palavras dos Temas Mais Frequentes")
-    texto_temas = " ".join(temas)
-    wordcloud = WordCloud(width=800, height=400, background_color='white').generate(texto_temas)
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.imshow(wordcloud, interpolation='bilinear')
-    ax.axis("off")
-    st.pyplot(fig)
+    if temas:
+        texto_temas = " ".join(temas)
+        wordcloud = WordCloud(width=1000, height=600, background_color='white').generate(texto_temas)
+        fig, ax = plt.subplots(figsize=(15, 8))
+        ax.imshow(wordcloud, interpolation='bilinear')
+        ax.axis("off")
+        st.pyplot(fig)
 
-# Linha do tempo de temas (se houver coluna de data)
-if "data" in df_dados_filtrado.columns and "tema" in df_dados_filtrado.columns:
-    st.markdown("### 📅 Evolução dos Temas ao Longo do Tempo")
-    df_dados_filtrado["data"] = pd.to_datetime(df_dados_filtrado["data"])
-    tema_tempo = df_dados_filtrado.groupby([pd.Grouper(key="data", freq="W"), "tema"]).size().reset_index(name="frequencia")
-    linha_fig = px.line(tema_tempo, x="data", y="frequencia", color="tema",
-                        labels={"frequencia": "Frequência", "data": "Data"},
-                        title="Tendência de Temas por Semana")
-    st.plotly_chart(linha_fig, use_container_width=True)
+        # Botão de download da imagem
+        from io import BytesIO
+        import base64
+        buf = BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        byte_im = buf.getvalue()
+        btn = st.download_button(
+            label="📥 Baixar Nuvem de Palavras",
+            data=byte_im,
+            file_name="nuvem_palavras.png",
+            mime="image/png"
+        )
+
+# Aba de mapa de calor por região
+with aba_mapa:
+    st.markdown("### 🌍 Mapa de Calor por Região")
+    if "regiao" in df_dados_filtrado.columns:
+        df_regiao = df_dados_filtrado.groupby("regiao").size().reset_index(name="frequencia")
+        fig = px.bar(df_regiao, x="regiao", y="frequencia", color="frequencia", 
+                     title="Frequência de Conteúdo por Região", color_continuous_scale="Viridis")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("Dados regionais não disponíveis.")
 
 # Dica final
 st.markdown("---")
-st.markdown("📌 **Dica:** Use as informações abaixo para criar títulos, descrições e conteúdos alinhados com os sentimentos e temas que mais estão engajando no momento!")
+st.markdown("📌 **Dica:** Use essas visões estratégicas para alinhar sua produção com o que está emocionando e conectando com seu público!")
