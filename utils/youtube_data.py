@@ -1,5 +1,63 @@
 # Função para coletar dados do YouTube automaticamente
 
-def coletar_dados_youtube():
-    import pandas as pd
-    return pd.DataFrame({'conteudo': ['treino', 'motivação'], 'likes': [800, 2000]})
+from googleapiclient.discovery import build
+import pandas as pd
+import streamlit as st
+
+def coletar_dados_youtube(max_itens=50):
+    """
+    Coleta vídeos populares do YouTube com base em busca de tendências.
+    
+    Args:
+        max_itens (int): Número máximo de vídeos a serem coletados.
+        
+    Returns:
+        pd.DataFrame: DataFrame com informações dos vídeos.
+    """
+    if "YOUTUBE_API_KEY" not in st.secrets:
+        st.error("❌ Chave da API do YouTube não configurada.")
+        st.stop()
+
+    try:
+        youtube = build("youtube", "v3", developerKey=st.secrets["YOUTUBE_API_KEY"])
+
+        resultados = []
+        next_page_token = None
+
+        while len(resultados) < max_itens:
+            limite = min(50, max_itens - len(resultados))
+
+            request = youtube.search().list(
+                part="snippet",
+                chart="mostPopular",
+                regionCode="BR",
+                maxResults=limite,
+                pageToken=next_page_token
+            )
+
+            response = request.execute()
+
+            for item in response.get("items", []):
+                video = item.get("snippet", {})
+                resultados.append({
+                    "conteudo": video.get("title", "Título não disponível"),
+                    "descricao": video.get("description", ""),
+                    "canal": video.get("channelTitle", "Canal desconhecido"),
+                    "tags": ", ".join(video.get("tags", ["Sem tags"]))[:3],
+                    "data_publicacao": video.get("publishedAt", "Data não disponível"),
+                    "popularidade": video.get("viewCount", 0),
+                    "likes": video.get("likeCount", 0),
+                    "fonte": "YouTube",
+                    "link": f"https://youtu.be/ {item['id']['videoId']}"
+                })
+
+            next_page_token = response.get("nextPageToken")
+            if not next_page_token:
+                break
+
+        df = pd.DataFrame(resultados)
+        return df
+
+    except Exception as e:
+        st.error(f"🚨 Erro ao coletar dados do YouTube: {e}")
+        return pd.DataFrame()
