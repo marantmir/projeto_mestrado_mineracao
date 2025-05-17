@@ -3,7 +3,7 @@ from spotipy.oauth2 import SpotifyClientCredentials
 import pandas as pd
 import streamlit as st
 
-def coletar_dados_spotify(max_itens=50):
+def coletar_dados_spotify(max_itens=500):
     """
     Coleta dados de músicas populares do Spotify.
     
