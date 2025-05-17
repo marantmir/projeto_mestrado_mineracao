@@ -1,0 +1,1 @@
+# projeto_mestrado_mineracao
