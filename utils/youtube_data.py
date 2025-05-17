@@ -4,7 +4,8 @@ from googleapiclient.discovery import build
 import pandas as pd
 import streamlit as st
 
-def coletar_dados_youtube(max_itens=50):
+@st.cache_data(ttl=3600)  # Cache por 1 hora
+def coletar_dados_youtube(max_itens=10):
     if "YOUTUBE_API_KEY" not in st.secrets:
         st.error("❌ Chave da API do YouTube não configurada.")
         st.stop()
