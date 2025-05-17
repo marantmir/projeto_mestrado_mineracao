@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
 
 from utils.spotify_data import coletar_dados_spotify
 from utils.youtube_data import coletar_dados_youtube
@@ -62,7 +64,7 @@ with st.spinner("🔗 Detectando tendências e associações..."):
 st.subheader("📈 Tendências Atuais para Seu Público")
 gerar_visualizacoes(df_dados_filtrado, associacoes, temas)
 
-# Exemplo de gráfico de sentimentos
+# Gráfico de sentimentos
 if "sentimento" in df_dados_filtrado.columns:
     st.markdown("### 💬 Distribuição de Sentimentos nos Conteúdos")
     sentimento_fig = px.histogram(df_dados_filtrado, x="sentimento", color="fonte",
@@ -70,6 +72,26 @@ if "sentimento" in df_dados_filtrado.columns:
                                   labels={"sentimento": "Sentimento Detectado"},
                                   title="Frequência de Sentimentos por Fonte")
     st.plotly_chart(sentimento_fig, use_container_width=True)
+
+# Nuvem de palavras com base nos temas
+if temas:
+    st.markdown("### ☁️ Nuvem de Palavras dos Temas Mais Frequentes")
+    texto_temas = " ".join(temas)
+    wordcloud = WordCloud(width=800, height=400, background_color='white').generate(texto_temas)
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.imshow(wordcloud, interpolation='bilinear')
+    ax.axis("off")
+    st.pyplot(fig)
+
+# Linha do tempo de temas (se houver coluna de data)
+if "data" in df_dados_filtrado.columns and "tema" in df_dados_filtrado.columns:
+    st.markdown("### 📅 Evolução dos Temas ao Longo do Tempo")
+    df_dados_filtrado["data"] = pd.to_datetime(df_dados_filtrado["data"])
+    tema_tempo = df_dados_filtrado.groupby([pd.Grouper(key="data", freq="W"), "tema"]).size().reset_index(name="frequencia")
+    linha_fig = px.line(tema_tempo, x="data", y="frequencia", color="tema",
+                        labels={"frequencia": "Frequência", "data": "Data"},
+                        title="Tendência de Temas por Semana")
+    st.plotly_chart(linha_fig, use_container_width=True)
 
 # Dica final
 st.markdown("---")
