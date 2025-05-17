@@ -5,15 +5,6 @@ import pandas as pd
 import streamlit as st
 
 def coletar_dados_youtube(max_itens=50):
-    """
-    Coleta vídeos populares do YouTube com base em busca de tendências.
-    
-    Args:
-        max_itens (int): Número máximo de vídeos a serem coletados.
-        
-    Returns:
-        pd.DataFrame: DataFrame com informações dos vídeos.
-    """
     if "YOUTUBE_API_KEY" not in st.secrets:
         st.error("❌ Chave da API do YouTube não configurada.")
         st.stop()
@@ -29,8 +20,9 @@ def coletar_dados_youtube(max_itens=50):
 
             request = youtube.search().list(
                 part="snippet",
-                chart="mostPopular",
+                q="trending brasil",
                 regionCode="BR",
+                order="date",
                 maxResults=limite,
                 pageToken=next_page_token
             )
@@ -43,10 +35,10 @@ def coletar_dados_youtube(max_itens=50):
                     "conteudo": video.get("title", "Título não disponível"),
                     "descricao": video.get("description", ""),
                     "canal": video.get("channelTitle", "Canal desconhecido"),
-                    "tags": ", ".join(video.get("tags", ["Sem tags"]))[:3],
+                    "tags": ", ".join(video.get("tags", ["Sem tags"])[:3]),
                     "data_publicacao": video.get("publishedAt", "Data não disponível"),
-                    "popularidade": video.get("viewCount", 0),
-                    "likes": video.get("likeCount", 0),
+                    "popularidade": int(video.get("publishedAt", "0").split("T")[0].replace("-", "")),  # Exemplo simples
+                    "likes": int(video.get("likeCount", 0)),
                     "fonte": "YouTube",
                     "link": f"https://youtu.be/ {item['id']['videoId']}"
                 })
