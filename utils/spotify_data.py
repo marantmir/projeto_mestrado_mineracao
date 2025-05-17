@@ -1,4 +1,4 @@
-# utils/spotify_data.py
+# Função para coletar dados do Spotify automaticamente
 
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
