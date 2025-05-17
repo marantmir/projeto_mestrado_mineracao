@@ -31,13 +31,20 @@ def coletar_dados_youtube(max_itens=50):
 
             for item in response.get("items", []):
                 video = item.get("snippet", {})
-                resultados.append({
+
+                # Ajuste processando data_publicacao e convertendo para popularidade
+                data_pub = video.get("publishedAt", "0")
+                try:
+                    popularidade_valor = int(data_pub.split("T")[0].replace("-", ""))
+                except (ValueError, TypeError):
+                    popularidade_valor = 0
+                    resultados.append({
                     "conteudo": video.get("title", "Título não disponível"),
                     "descricao": video.get("description", ""),
                     "canal": video.get("channelTitle", "Canal desconhecido"),
                     "tags": ", ".join(video.get("tags", ["Sem tags"])[:3]),
-                    "data_publicacao": video.get("publishedAt", "Data não disponível"),
-                    "popularidade": int(video.get("publishedAt", "0").split("T")[0].replace("-", "")),  # Exemplo simples
+                    "data_publicacao": data_pub,
+                    "popularidade": popularidade_valor,  # Usa o valor calculado acima
                     "likes": int(video.get("likeCount", 0)),
                     "fonte": "YouTube",
                     "link": f"https://youtu.be/ {item['id']['videoId']}"
