@@ -5,16 +5,8 @@ from spotipy.oauth2 import SpotifyClientCredentials
 import pandas as pd
 import streamlit as st
 
-def coletar_dados_spotify(max_itens=50):
-    """
-    Coleta dados reais do Spotify com base em lançamentos recentes e trata campos ausentes.
-    
-    Args:
-        max_itens (int): Quantidade máxima de músicas a serem coletadas.
-        
-    Returns:
-        pd.DataFrame: DataFrame com informações das músicas coletadas.
-    """
+@st.cache_data(ttl=3600)
+def coletar_dados_spotify(max_itens=10):
     if "SPOTIFY_CLIENT_ID" not in st.secrets or "SPOTIFY_CLIENT_SECRET" not in st.secrets:
         st.error("Credenciais do Spotify não configuradas.")
         st.stop()
@@ -30,7 +22,7 @@ def coletar_dados_spotify(max_itens=50):
         offset = 0
 
         while len(resultados) < max_itens:
-            limite = min(50, max_itens - len(resultados))
+            limite = min(10, max_itens - len(resultados))
             dados = sp.new_releases(country='BR', limit=limite, offset=offset)
             albuns = dados.get('albums', {}).get('items', [])
 
@@ -41,7 +33,6 @@ def coletar_dados_spotify(max_itens=50):
                 artista = album.get('artists', [{}])[0]
                 artista_id = artista.get('id')
 
-                # Pega informações do artista se possível
                 artista_info = {}
                 if artista_id:
                     try:
@@ -49,11 +40,10 @@ def coletar_dados_spotify(max_itens=50):
                     except:
                         artista_info = {}
 
-                # Monta os dados do álbum com fallbacks seguros
                 resultados.append({
                     'conteudo': album.get('name', 'Nome não disponível'),
                     'artista': artista.get('name', 'Artista desconhecido'),
-                    'popularidade': album.get('popularity', None),  # Pode ser None
+                    'popularidade': album.get('popularity', 0),
                     'genero': ', '.join(artista_info.get('genres', ['Não informado'])[:3]),
                     'data_lancamento': album.get('release_date', 'Data não disponível'),
                     'fonte': 'Spotify',
@@ -66,5 +56,13 @@ def coletar_dados_spotify(max_itens=50):
         return df
 
     except Exception as e:
-        st.error(f"Erro ao coletar dados do Spotify: {e}")
-        return pd.DataFrame()
+        st.warning(f"🚨 Erro ao coletar dados do Spotify: {e}. Retornando dados simulados.")
+        return pd.DataFrame({
+            'conteudo': ['Liberdade', 'Sucesso'],
+            'artista': ['Anavitória', 'Tiago Iorc'],
+            'popularidade': [76, 72],
+            'genero': ['pop, brega funk', 'rock, indie'],
+            'data_lancamento': ['2024-03-15', '2024-03-10'],
+            'fonte': ['Spotify', 'Spotify'],
+            'link': ['#', '#']
+        })
