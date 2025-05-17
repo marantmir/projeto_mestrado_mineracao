@@ -3,11 +3,6 @@
 import pandas as pd
 
 def analisar_sentimentos(df):
-    """
-    Analisa sentimentos com base em popularidade (Spotify) ou likes (YouTube).
-    Garante que os valores sejam numéricos antes da comparação.
-    """
-
     def classificar(row):
         if row['fonte'] == 'YouTube':
             likes = row.get('likes', 0)
@@ -22,7 +17,6 @@ def analisar_sentimentos(df):
             else:
                 return 'negativo'
         else:
-            # Spotify
             pop = row.get('popularidade', 0)
             try:
                 pop = int(pop)
