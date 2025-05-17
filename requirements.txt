@@ -1,0 +1,13 @@
+pydantic
+pytrends
+google
+tenacity
+google-api-python-client
+textblob
+pandas
+streamlit
+plotly
+wordcloud
+matplotlib
+firebase-admin
+spotipy
