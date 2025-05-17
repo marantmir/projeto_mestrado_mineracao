@@ -1,256 +1,35 @@
-"""Projeto Mestrado | Mineração de Dados | Produção de Conteúdo.ipynb
-## Implementação do Projeto de Mestrado | Mineração de dados para Produção de Conteúdo
-"""
 
-import os
-import subprocess
-import sys
-from typing import Optional, List, Dict
-import importlib
-import time
-from tenacity import retry, stop_after_attempt, wait_exponential
-from datetime import datetime
-import pandas as pd
 import streamlit as st
-import plotly.express as px
-import matplotlib.pyplot as plt
-from io import BytesIO
-import json
-import firebase_admin
-from firebase_admin import credentials, firestore
+from utils.spotify_data import coletar_dados_spotify
+from utils.youtube_data import coletar_dados_youtube
+from utils.sentimentos import analisar_sentimentos
+from utils.associacoes import gerar_associacoes
+from utils.visualizacoes import gerar_visualizacoes
+import pandas as pd
 
-# Lista de bibliotecas necessárias
-REQUIRED_LIBRARIES = [
-    ("pydantic", "pydantic"), ("pytrends", "pytrends"), ("google", "google"),
-    ("tenacity", "tenacity"), ("googleapiclient", "google-api-python-client"),
-    ("textblob", "textblob"), ("pandas", "pandas"), ("streamlit", "streamlit"),
-    ("plotly", "plotly"), ("wordcloud", "wordcloud"), ("matplotlib", "matplotlib"),
-    ("firebase_admin", "firebase-admin"), ("spotipy", "spotipy")
-]
+st.set_page_config(page_title="Radar Cultural Inteligente", layout="wide")
+st.title("🎧 Radar Cultural Inteligente")
+st.markdown("Descubra tendências de temas e sentimentos a partir de dados reais do Spotify e YouTube para criar conteúdos que engajam!")
 
-def install_library(module_name: str, pip_name: str, max_attempts: int = 3) -> bool:
-    try:
-        importlib.import_module(module_name)
-        print(f"{module_name} já está instalado.")
-        return True
-    except ImportError:
-        for attempt in range(1, max_attempts + 1):
-            print(f"Tentativa {attempt}/{max_attempts}: Instalando {pip_name}...")
-            try:
-                cmd = [sys.executable, "-m", "pip", "install", "--no-cache-dir", pip_name]
-                if attempt > 1:
-                    cmd.append("--force-reinstall")
-                subprocess.run(cmd, check=True, capture_output=True, text=True)
-                print(f"{pip_name} instalado com sucesso.")
-                importlib.invalidate_caches()
-                importlib.import_module(module_name)
-                return True
-            except subprocess.CalledProcessError as e:
-                print(f"Erro ao instalar {pip_name} na tentativa {attempt}: {e.stderr}")
-            except ImportError as e:
-                print(f"Erro ao importar {module_name} após instalação: {e}")
-        return False
+# Coleta de dados
+with st.spinner("🔍 Coletando dados do Spotify..."):
+    df_spotify = coletar_dados_spotify()
+with st.spinner("🔍 Coletando dados do YouTube..."):
+    df_youtube = coletar_dados_youtube()
 
-for module_name, pip_name in REQUIRED_LIBRARIES:
-    if not install_library(module_name, pip_name):
-        raise ImportError(f"Não foi possível instalar a biblioteca {pip_name}. Por favor, instale manualmente.")
+# Unificação
+df_spotify["fonte"] = "Spotify"
+df_youtube["fonte"] = "YouTube"
+df_dados = pd.concat([df_spotify, df_youtube], ignore_index=True)
 
-import wordcloud
-from wordcloud import WordCloud
-import pytrends
-from pytrends.request import TrendReq
-import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
-from pydantic import BaseModel, Field, ValidationError
-from googleapiclient.discovery import build
-from textblob import TextBlob
+# Análise de sentimentos
+with st.spinner("🧠 Analisando sentimentos..."):
+    df_dados = analisar_sentimentos(df_dados)
 
-SUPPORTED_REGIONS = {'BR', 'US', 'GB', 'CA', 'AU', 'DE', 'FR', 'IN', 'IT', 'ES'}
+# Apriori e temas
+with st.spinner("🔗 Gerando associações..."):
+    associacoes, temas = gerar_associacoes(df_dados)
 
-class YouTubeConfig(BaseModel):
-    api_key: str
-    max_videos: int = 5
-    region_code: str = "BR"
-    topic: Optional[str] = None
-
-    def __str__(self):
-        return f"YouTubeConfig(max_videos={self.max_videos}, region_code='{self.region_code}', topic={self.topic!r})"
-
-class SpotifyConfig(BaseModel):
-    client_id: str
-    client_secret: str
-
-def load_config() -> tuple[YouTubeConfig, SpotifyConfig]:
-    try:
-        youtube_config = YouTubeConfig(
-            api_key=st.secrets["YOUTUBE_API_KEY"],
-            max_videos=int(os.getenv("YOUTUBE_MAX_VIDEOS", 5)),
-            region_code=os.getenv("YOUTUBE_REGION_CODE", "BR"),
-            topic=os.getenv("YOUTUBE_TOPIC", None),
-        )
-        if youtube_config.region_code not in SUPPORTED_REGIONS:
-            youtube_config.region_code = "US"
-
-        spotify_config = SpotifyConfig(
-            client_id=st.secrets["SPOTIFY_CLIENT_ID"],
-            client_secret=st.secrets["SPOTIFY_CLIENT_SECRET"]
-        )
-        return youtube_config, spotify_config
-    except Exception as e:
-        raise ValueError(f"Erro ao carregar configurações: {e}")
-
-def initialize_firestore():
-    try:
-        firebase_creds = json.loads(st.secrets["FIREBASE_CREDENTIALS"])
-        cred = credentials.Certificate(firebase_creds)
-        if not firebase_admin._apps:
-            firebase_admin.initialize_app(cred)
-        return firestore.client()
-    except Exception as e:
-        raise ValueError(f"Erro ao inicializar o Firestore: {e}")
-
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=4, max=10))
-def get_trending_keywords(config: YouTubeConfig) -> List[str]:
-    try:
-        pytrends = TrendReq(hl='pt-BR', tz=360)
-        keyword = config.topic if config.topic else "video"
-        pytrends.build_payload([keyword], cat=0, timeframe='today 1-m', geo=config.region_code)
-        interest = pytrends.interest_over_time()
-        if not interest.empty and keyword in interest.columns:
-            related = pytrends.related_queries()
-            if related.get(keyword, {}).get('top'):
-                return related[keyword]['top']['query'].head(3).tolist()
-        suggestions = pytrends.suggestions(keyword="video")
-        return [s['title'] for s in suggestions[:3]] if suggestions else []
-    except Exception as e:
-        print(f"Erro ao obter tendências: {e}")
-        return []
-
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=4, max=10))
-def collect_youtube_comments(config: YouTubeConfig, keywords: List[str], db) -> pd.DataFrame:
-    try:
-        youtube = build('youtube', 'v3', developerKey=config.api_key)
-        comentarios = []
-        for termo in (keywords or ["video"]):
-            res = youtube.search().list(q=termo, part='snippet', type='video', maxResults=config.max_videos, regionCode=config.region_code).execute()
-            for item in res.get('items', []):
-                video_id = item['id']['videoId']
-                video_title = item['snippet']['title']
-                try:
-                    request = youtube.commentThreads().list(part='snippet', videoId=video_id, textFormat='plainText', maxResults=100)
-                    while request:
-                        response = request.execute()
-                        for comment in response['items']:
-                            snippet = comment['snippet']['topLevelComment']['snippet']
-                            texto = snippet['textDisplay']
-                            sentimento = TextBlob(texto).sentiment.polarity
-                            comment_data = {
-                                'termo': termo,
-                                'video_id': video_id,
-                                'video_title': video_title,
-                                'autor': snippet['authorDisplayName'],
-                                'comentario': texto,
-                                'data': snippet['publishedAt'],
-                                'likes': snippet['likeCount'],
-                                'sentimento': sentimento,
-                                'created_at': datetime.utcnow().isoformat()
-                            }
-                            db.collection('youtube_comments').add(comment_data)
-                            comentarios.append(comment_data)
-                        request = youtube.commentThreads().list_next(request, response)
-                        time.sleep(1)
-                except Exception as e:
-                    print(f"Erro no vídeo {video_id}: {e}")
-                    continue
-        return pd.DataFrame(comentarios)
-    except Exception as e:
-        print(f"Erro ao buscar vídeos: {e}")
-        return pd.DataFrame()
-
-def fetch_comments_from_firestore(db) -> pd.DataFrame:
-    try:
-        return pd.DataFrame([doc.to_dict() for doc in db.collection('youtube_comments').stream()])
-    except Exception as e:
-        print(f"Erro ao buscar Firestore: {e}")
-        return pd.DataFrame()
-
-def collect_spotify_top_tracks(config: SpotifyConfig, artist_name: str) -> pd.DataFrame:
-    try:
-        sp = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials(client_id=config.client_id, client_secret=config.client_secret))
-        results = sp.search(q=f'artist:{artist_name}', type='artist', limit=1)
-        if not results['artists']['items']:
-            return pd.DataFrame()
-        artist_id = results['artists']['items'][0]['id']
-        top_tracks = sp.artist_top_tracks(artist_id, country='BR')
-        return pd.DataFrame([{
-            'nome_musica': t['name'],
-            'album': t['album']['name'],
-            'data_lancamento': t['album']['release_date'],
-            'popularidade': t['popularity'],
-            'duracao_segundos': t['duration_ms'] // 1000
-        } for t in top_tracks['tracks'][:5]])
-    except Exception as e:
-        print(f"Erro Spotify: {e}")
-        return pd.DataFrame()
-
-def generate_wordcloud(text: str) -> BytesIO:
-    wc = WordCloud(width=800, height=400, background_color='white').generate(text)
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.imshow(wc, interpolation='bilinear')
-    ax.axis('off')
-    buf = BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight')
-    plt.close(fig)
-    buf.seek(0)
-    return buf
-
-def main():
-    st.set_page_config(page_title="YouTube + Spotify Trends", layout="wide")
-    st.title("📊 YouTube & Spotify: Tendências e Sentimentos")
-    try:
-        youtube_config, spotify_config = load_config()
-        artist_name = st.text_input("Nome do artista (Spotify):", value="Anitta")
-        if st.button("🔄 Atualizar Dados"):
-            st.cache_data.clear()
-        db = initialize_firestore()
-        palavras_chave = get_trending_keywords(youtube_config)
-        df_comentarios = collect_youtube_comments(youtube_config, palavras_chave, db)
-        if df_comentarios.empty:
-            df_comentarios = fetch_comments_from_firestore(db)
-        df_spotify = collect_spotify_top_tracks(spotify_config, artist_name)
-        if palavras_chave:
-            st.write("**Termos analisados (YouTube):**", ', '.join(palavras_chave))
-        if not df_spotify.empty:
-            st.subheader(f"🎶 Músicas Populares de {artist_name}")
-            st.dataframe(df_spotify)
-        if df_comentarios.empty:
-            st.error("Nenhum comentário coletado.")
-            return
-        st.sidebar.header("Filtros")
-        videos = st.sidebar.multiselect("Vídeos:", df_comentarios['video_title'].unique())
-        termos = st.sidebar.multiselect("Palavras-chave:", df_comentarios['termo'].unique())
-        sentimento_min, sentimento_max = st.sidebar.slider("Sentimento:", -1.0, 1.0, (-1.0, 1.0))
-        min_likes = st.sidebar.number_input("Mínimo de likes:", min_value=0, value=0)
-        df_filtrado = df_comentarios[
-            df_comentarios['video_title'].isin(videos) &
-            df_comentarios['termo'].isin(termos) &
-            df_comentarios['sentimento'].between(sentimento_min, sentimento_max) &
-            (df_comentarios['likes'] >= min_likes)
-        ]
-        st.subheader("📈 Métricas YouTube")
-        st.metric("Total de Comentários", len(df_filtrado))
-        st.metric("Média Sentimento", f"{df_filtrado['sentimento'].mean():.2f}")
-        if not df_filtrado.empty:
-            fig = px.histogram(df_filtrado, x='sentimento', nbins=20)
-            st.plotly_chart(fig)
-            wordcloud_img = generate_wordcloud(" ".join(df_filtrado['comentario'].dropna()))
-            st.image(wordcloud_img, caption="Nuvem de Palavras")
-            st.dataframe(df_filtrado)
-            st.download_button("📥 Baixar CSV", df_filtrado.to_csv(index=False), "comentarios.csv", "text/csv")
-        else:
-            st.warning("Sem dados com os filtros atuais.")
-    except Exception as e:
-        st.error(f"Erro: {e}")
-
-if __name__ == "__main__":
-    main()
+# Visualizações
+st.subheader("🔍 Tendências Detectadas")
+gerar_visualizacoes(df_dados, associacoes, temas)
