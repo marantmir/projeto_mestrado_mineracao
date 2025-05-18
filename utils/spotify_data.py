@@ -19,38 +19,20 @@ def coletar_dados_spotify(max_itens=10):
         sp = spotipy.Spotify(auth_manager=auth_manager)
 
         resultados = []
-        offset = 0
+        dados = sp.new_releases(country='BR', limit=max_itens, offset=0)
+        albuns = dados.get('albums', {}).get('items', [])
 
-        while len(resultados) < max_itens:
-            limite = min(10, max_itens - len(resultados))
-            dados = sp.new_releases(country='BR', limit=limite, offset=offset)
-            albuns = dados.get('albums', {}).get('items', [])
-
-            if not albuns:
-                break
-
-            for album in albuns:
-                artista = album.get('artists', [{}])[0]
-                artista_id = artista.get('id')
-
-                artista_info = {}
-                if artista_id:
-                    try:
-                        artista_info = sp.artist(artista_id)
-                    except:
-                        artista_info = {}
-
-                resultados.append({
-                    'conteudo': album.get('name', 'Nome não disponível'),
-                    'artista': artista.get('name', 'Artista desconhecido'),
-                    'popularidade': album.get('popularity', 0),
-                    'genero': ', '.join(artista_info.get('genres', ['Não informado'])[:3]),
-                    'data_lancamento': album.get('release_date', 'Data não disponível'),
-                    'fonte': 'Spotify',
-                    'link': album.get('external_urls', {}).get('spotify', '#')
-                })
-
-            offset += limite
+        for album in albuns:
+            artista = album.get('artists', [{}])[0]
+            resultados.append({
+                'conteudo': album.get('name', 'Nome não disponível'),
+                'artista': artista.get('name', 'Artista desconhecido'),
+                'popularidade': album.get('popularity', 0),
+                'genero': 'Não informado',  # evitamos chamada ao sp.artist
+                'data_lancamento': album.get('release_date', 'Data não disponível'),
+                'fonte': 'Spotify',
+                'link': album.get('external_urls', {}).get('spotify', '#')
+            })
 
         df = pd.DataFrame(resultados)
         return df
@@ -61,7 +43,7 @@ def coletar_dados_spotify(max_itens=10):
             'conteudo': ['Liberdade', 'Sucesso'],
             'artista': ['Anavitória', 'Tiago Iorc'],
             'popularidade': [76, 72],
-            'genero': ['pop, brega funk', 'rock, indie'],
+            'genero': ['pop', 'indie'],
             'data_lancamento': ['2024-03-15', '2024-03-10'],
             'fonte': ['Spotify', 'Spotify'],
             'link': ['#', '#']
