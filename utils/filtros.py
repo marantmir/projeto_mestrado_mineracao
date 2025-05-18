@@ -1,12 +1,18 @@
 import pandas as pd
 
 def aplicar_filtros(df, pais, regiao, faixa_etaria, genero):
-    if pais != "Todos" and 'pais' in df.columns:
-        df = df[df['pais'] == pais]
-    if regiao != "Todas" and 'regiao' in df.columns:
-        df = df[df['regiao'] == regiao]
-    if faixa_etaria != "Todas" and 'faixa_etaria' in df.columns:
-        df = df[df['faixa_etaria'] == faixa_etaria]
-    if genero != "Todos" and 'genero' in df.columns:
-        df = df[df['genero'] == genero]
-    return df
+    df_filtrado = df.copy()
+
+    if pais != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["pais"] == pais]
+
+    if regiao != "Todas":
+        df_filtrado = df_filtrado[df_filtrado["regiao"] == regiao]
+
+    if faixa_etaria != "Todas":
+        df_filtrado = df_filtrado[df_filtrado["faixa_etaria"] == faixa_etaria]
+
+    if genero != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["genero"] == genero]
+
+    return df_filtrado
