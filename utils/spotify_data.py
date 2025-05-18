@@ -9,11 +9,6 @@ import streamlit as st
 def coletar_dados_spotify_cache():
     return coletar_dados_spotify()
 
-# Botão de atualização
-if st.button("🔄 Atualizar Dados do Spotify"):
-    st.cache_data.clear()
-    st.success("Dados atualizados com sucesso!")
-
 # Coleta com cache
 with st.spinner("🔍 Carregando dados do Spotify..."):
     df_spotify = coletar_dados_spotify_cache()
