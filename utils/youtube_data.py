@@ -5,7 +5,10 @@ import pandas as pd
 import streamlit as st
 import time
 
-@st.cache_data(ttl=3600)  # Cache por 1 hora
+@st.cache_data(ttl=3600, show_spinner=False)
+def coletar_dados_youtube_cache():
+    return coletar_dados_youtube()
+    
 def coletar_dados_youtube(max_itens=10):
     if "YOUTUBE_API_KEY" not in st.secrets:
         st.error("❌ Chave da API do YouTube não configurada.")
