@@ -4,6 +4,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
+from io import BytesIO
+import base64
 
 from utils.spotify_data import coletar_dados_spotify
 from utils.youtube_data import coletar_dados_youtube
@@ -24,18 +26,40 @@ with st.sidebar:
     regiao = st.selectbox("Região", ["Todas", "Norte", "Nordeste", "Centro-Oeste", "Sudeste", "Sul"])
     faixa_etaria = st.selectbox("Faixa Etária", ["Todas", "13-17", "18-24", "25-34", "35-44", "45+"])
     genero = st.selectbox("Gênero", ["Todos", "Masculino", "Feminino", "Outros"])
+    modo_rapido = st.checkbox("⚡ Modo Leve (sem análises pesadas)")
+
+# Botão para atualizar dados
+if st.sidebar.button("🔄 Atualizar Dados"):
+    st.cache_data.clear()
+    st.rerun()
+
+@st.cache_data(ttl=3600)
+def coletar_dados_spotify_cache():
+    return coletar_dados_spotify()
+
+@st.cache_data(ttl=3600)
+def coletar_dados_youtube_cache():
+    return coletar_dados_youtube()
+
+@st.cache_data(ttl=3600)
+def processar_sentimentos(df):
+    return analisar_sentimentos(df)
+
+@st.cache_data(ttl=3600)
+def processar_associacoes(df):
+    return gerar_associacoes(df)
 
 # Coleta de dados
 with st.spinner("🔍 Coletando dados do Spotify..."):
-    df_spotify = coletar_dados_spotify()
+    df_spotify = coletar_dados_spotify_cache()
 with st.spinner("🔍 Coletando dados do YouTube..."):
-    df_youtube = coletar_dados_youtube()
+    df_youtube = coletar_dados_youtube_cache()
 
 # Adiciona coluna de fonte
 df_spotify["fonte"] = "Spotify"
 df_youtube["fonte"] = "YouTube"
 
-# Simula colunas ausentes para compatibilidade
+# Simula colunas ausentes
 colunas_simuladas = {
     "pais": "Brasil",
     "regiao": "Sudeste",
@@ -55,35 +79,38 @@ df_dados = pd.concat([df_spotify, df_youtube], ignore_index=True)
 # Aplicar filtros personalizados
 df_dados_filtrado = aplicar_filtros(df_dados, pais, regiao, faixa_etaria, genero)
 
-# Análise de sentimentos
-with st.spinner("🧠 Analisando sentimentos..."):
-    df_dados_filtrado = analisar_sentimentos(df_dados_filtrado)
+# Modo leve usa apenas parte dos dados
+if modo_rapido:
+    df_dados_filtrado = df_dados_filtrado.sample(min(100, len(df_dados_filtrado)))
 
-# Associações e temas
-with st.spinner("🔗 Detectando tendências e associações..."):
-    associacoes, temas = gerar_associacoes(df_dados_filtrado)
+# Análise de sentimentos e associações
+if not modo_rapido:
+    with st.spinner("🧠 Analisando sentimentos..."):
+        df_dados_filtrado = processar_sentimentos(df_dados_filtrado)
+    with st.spinner("🔗 Detectando tendências e associações..."):
+        associacoes, temas = processar_associacoes(df_dados_filtrado)
+else:
+    associacoes, temas = [], []
 
 # Abas para melhor navegação
 aba_tendencias, aba_sentimentos, aba_nuvem, aba_mapa = st.tabs([
     "📊 Tendências Gerais", "😊 Sentimentos", "☁️ Nuvem de Palavras", "🗺️ Mapa de Regiões"
 ])
 
-# Aba de tendências gerais
 with aba_tendencias:
     st.subheader("📈 Tendências Atuais para Seu Público")
-    gerar_visualizacoes(df_dados_filtrado, associacoes, temas)
+    if not modo_rapido and not df_dados_filtrado.empty:
+        gerar_visualizacoes(df_dados_filtrado, associacoes, temas)
+        st.markdown("### 🔍 Temas Mais Comuns")
+        df_temas_freq = pd.Series(temas).value_counts().reset_index()
+        df_temas_freq.columns = ["Tema", "Frequência"]
+        st.dataframe(df_temas_freq.style.background_gradient(cmap="Blues"), use_container_width=True)
+    else:
+        st.info("Ative o modo completo para ver tendências detalhadas.")
 
-    # Exibir tabela de temas e associações de forma visualmente clara
-    st.markdown("### 🔍 Temas Mais Comuns")
-    df_temas_freq = pd.Series(temas).value_counts().reset_index()
-    df_temas_freq.columns = ["Tema", "Frequência"]
-    st.dataframe(df_temas_freq.style.background_gradient(cmap="Blues"), use_container_width=True)
-
-# Aba de sentimentos
 with aba_sentimentos:
     st.markdown("### 💬 Distribuição de Sentimentos por Fonte e Tema")
-
-    if "sentimento" in df_dados_filtrado.columns and "tema" in df_dados_filtrado.columns:
+    if not modo_rapido and "sentimento" in df_dados_filtrado.columns and "tema" in df_dados_filtrado.columns:
         fig = px.histogram(
             df_dados_filtrado,
             x="tema",
@@ -97,70 +124,33 @@ with aba_sentimentos:
         fig.update_layout(showlegend=True)
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning("Dados insuficientes para análise de sentimento por tema.")
+        st.warning("Dados insuficientes para análise de sentimento por tema ou modo leve ativado.")
 
-# Aba de nuvem de palavras
 with aba_nuvem:
     st.markdown("### ☁️ Nuvem de Palavras dos Temas Mais Frequentes")
-    if temas:
+    if not modo_rapido and temas:
         texto_temas = " ".join(temas)
         wordcloud = WordCloud(width=1000, height=600, background_color='white').generate(texto_temas)
         fig, ax = plt.subplots(figsize=(15, 8))
         ax.imshow(wordcloud, interpolation='bilinear')
         ax.axis("off")
         st.pyplot(fig)
-
-        # Botão de download da imagem
-        from io import BytesIO
-        import base64
         buf = BytesIO()
         fig.savefig(buf, format="png", bbox_inches="tight")
         byte_im = buf.getvalue()
-        btn = st.download_button(
-            label="📥 Baixar Nuvem de Palavras",
-            data=byte_im,
-            file_name="nuvem_palavras.png",
-            mime="image/png"
-        )
+        st.download_button("📥 Baixar Nuvem de Palavras", data=byte_im, file_name="nuvem_palavras.png", mime="image/png")
+    else:
+        st.info("Nuvem de palavras disponível apenas no modo completo com dados suficientes.")
 
-# Aba de mapa de calor por região
 with aba_mapa:
     st.markdown("### 🌍 Mapa de Calor por Região")
-    if "regiao" in df_dados_filtrado.columns:
+    if "regiao" in df_dados_filtrado.columns and not df_dados_filtrado.empty:
         df_regiao = df_dados_filtrado.groupby("regiao").size().reset_index(name="frequencia")
         fig = px.bar(df_regiao, x="regiao", y="frequencia", color="frequencia", 
                      title="Frequência de Conteúdo por Região", color_continuous_scale="Viridis")
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning("Dados regionais não disponíveis.")
+        st.warning("Dados regionais não disponíveis ou modo leve ativado.")
 
-import base64
-from io import BytesIO
-
-def gerar_pdf_storytelling(df, titulo="Análise de Tendências"):
-    from fpdf import FPDF
-
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, titulo, ln=True)
-
-    pdf.set_font("Arial", '', 12)
-    for i, row in df.iterrows():
-        texto = f"{row['conteudo']} - {row['artista']} | Gênero: {row['genero']} | Popularidade: {row['popularidade']}"
-        pdf.multi_cell(0, 10, texto)
-
-    # Salvar em memória
-    buf = BytesIO()
-    pdf.output(buf)
-    byte_pdf = buf.getvalue()
-    return byte_pdf
-
-# Uso no Streamlit
-pdf_bytes = gerar_pdf_storytelling(df_dados_filtrado)
-st.download_button("📄 Baixar Relatório em PDF", data=pdf_bytes, file_name="analise_tendencias.pdf", mime="application/pdf")
-
-
-# Dica final
 st.markdown("---")
 st.markdown("📌 **Dica:** Use essas visões estratégicas para alinhar sua produção com o que está emocionando e conectando com seu público!")
