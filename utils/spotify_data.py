@@ -5,14 +5,6 @@ from spotipy.oauth2 import SpotifyClientCredentials
 import pandas as pd
 import streamlit as st
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def coletar_dados_spotify_cache():
-    return coletar_dados_spotify()
-
-# Coleta com cache
-with st.spinner("🔍 Carregando dados do Spotify..."):
-    df_spotify = coletar_dados_spotify_cache()
-
 def coletar_dados_spotify(max_itens=10):
     if "SPOTIFY_CLIENT_ID" not in st.secrets or "SPOTIFY_CLIENT_SECRET" not in st.secrets:
         st.error("Credenciais do Spotify não configuradas.")
