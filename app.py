@@ -134,6 +134,33 @@ with aba_mapa:
     else:
         st.warning("Dados regionais não disponíveis.")
 
+import base64
+from io import BytesIO
+
+def gerar_pdf_storytelling(df, titulo="Análise de Tendências"):
+    from fpdf import FPDF
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, titulo, ln=True)
+
+    pdf.set_font("Arial", '', 12)
+    for i, row in df.iterrows():
+        texto = f"{row['conteudo']} - {row['artista']} | Gênero: {row['genero']} | Popularidade: {row['popularidade']}"
+        pdf.multi_cell(0, 10, texto)
+
+    # Salvar em memória
+    buf = BytesIO()
+    pdf.output(buf)
+    byte_pdf = buf.getvalue()
+    return byte_pdf
+
+# Uso no Streamlit
+pdf_bytes = gerar_pdf_storytelling(df_dados_filtrado)
+st.download_button("📄 Baixar Relatório em PDF", data=pdf_bytes, file_name="analise_tendencias.pdf", mime="application/pdf")
+
+
 # Dica final
 st.markdown("---")
 st.markdown("📌 **Dica:** Use essas visões estratégicas para alinhar sua produção com o que está emocionando e conectando com seu público!")
