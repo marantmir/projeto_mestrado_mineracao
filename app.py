@@ -103,6 +103,32 @@ with aba_tendencias:
         df_temas_freq = pd.Series(temas).value_counts().reset_index()
         df_temas_freq.columns = ["Tema", "Frequência"]
         st.dataframe(df_temas_freq.style.background_gradient(cmap="Blues"), use_container_width=True)
+
+    # Geração de insights automáticos por tema e sentimento
+if not modo_rapido and "sentimento" in df_dados_filtrado.columns and "tema" in df_dados_filtrado.columns:
+
+    st.markdown("### 🤖 Insights Estratégicos Automáticos")
+
+    temas_unicos = df_dados_filtrado["tema"].dropna().unique()
+
+    insights = []
+
+    for tema in temas_unicos:
+        dados_tema = df_dados_filtrado[df_dados_filtrado["tema"] == tema]
+        if not dados_tema.empty:
+            resumo = dados_tema.groupby(["fonte", "sentimento"]).size().reset_index(name="quantidade")
+            frases = []
+            for _, row in resumo.iterrows():
+                fonte = row["fonte"]
+                sentimento = row["sentimento"]
+                qtd = row["quantidade"]
+                frases.append(f"{qtd} conteúdo(s) com sentimento **{sentimento}** no **{fonte}**")
+            insight = f"🔎 O tema **{tema}** apresenta: " + ", ".join(frases) + "."
+            insights.append(insight)
+
+    for frase in insights:
+        st.markdown(frase)
+
     else:
         st.info("Ative o modo completo para ver tendências detalhadas.")
 
