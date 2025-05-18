@@ -1,11 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 from io import BytesIO
-import base64
 
 from utils.spotify_data import coletar_dados_spotify
 from utils.youtube_data import coletar_dados_youtube
@@ -117,7 +115,6 @@ with aba_sentimentos:
             color="sentimento",
             facet_col="fonte",
             barmode="group",
-            text_auto=True,
             labels={"tema": "Temas", "count": "Quantidade"},
             title="Sentimentos por Tema nas Fontes (Spotify vs YouTube)"
         )
@@ -137,8 +134,7 @@ with aba_nuvem:
         st.pyplot(fig)
         buf = BytesIO()
         fig.savefig(buf, format="png", bbox_inches="tight")
-        byte_im = buf.getvalue()
-        st.download_button("📥 Baixar Nuvem de Palavras", data=byte_im, file_name="nuvem_palavras.png", mime="image/png")
+        st.download_button("📥 Baixar Nuvem de Palavras", data=buf.getvalue(), file_name="nuvem_palavras.png", mime="image/png")
     else:
         st.info("Nuvem de palavras disponível apenas no modo completo com dados suficientes.")
 
