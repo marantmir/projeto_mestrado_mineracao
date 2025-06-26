@@ -1,0 +1,1 @@
+def coletar_dados_spotify(): return []

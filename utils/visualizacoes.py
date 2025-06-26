@@ -1,0 +1,1 @@
+def gerar_visualizacoes(df, associacoes, temas): import plotly.express as px; return px.scatter(x=[1,2], y=[3,4])

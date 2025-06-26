@@ -1,0 +1,1 @@
+def analisar_sentimentos(df): return df

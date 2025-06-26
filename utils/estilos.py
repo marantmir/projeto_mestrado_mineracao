@@ -1,0 +1,1 @@
+def gerar_pdf(df): return b'PDF-MOCK'
