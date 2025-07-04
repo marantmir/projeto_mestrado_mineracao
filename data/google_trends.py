@@ -1,4 +1,3 @@
-# data/google_trends.py
 from pytrends.request import TrendReq
 import pandas as pd
 
