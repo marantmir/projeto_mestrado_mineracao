@@ -1,0 +1,8 @@
+streamlit
+pandas
+requests
+plotly
+google-api-python-client
+pytrends
+tweepy
+spotipy
