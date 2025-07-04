@@ -1,4 +1,3 @@
-# main.py
 import streamlit as st
 from data.spotify_data import coletar_dados_spotify
 from data.youtube_data import coletar_dados_youtube
@@ -6,9 +5,10 @@ from data.google_trends import coletar_dados_trends
 from data.x_data import coletar_dados_x
 from data.db_manager import salvar_df_em_tabela, carregar_tabela
 from insights.visualizacoes import gerar_visoes
+from insights.aprendizado import analisar_apriori, analisar_clusters
 
 st.title("🎧 Radar Cultural Inteligente")
-st.markdown("Análise automatizada de tendências culturais sem filtros manuais.")
+st.markdown("Análise automatizada de tendências culturais com IA aplicada.")
 
 if st.button("🔄 Coletar Novos Dados"):
     df_spotify = coletar_dados_spotify()
@@ -23,10 +23,13 @@ if st.button("🔄 Coletar Novos Dados"):
 
     st.success("Dados atualizados com sucesso!")
 
-# Carrega e exibe
 df_spotify = carregar_tabela("spotify")
 df_youtube = carregar_tabela("youtube")
 df_trends = carregar_tabela("trends")
 df_x = carregar_tabela("twitter")
 
 gerar_visoes(df_spotify, df_youtube, df_trends, df_x)
+
+st.header("🧠 Análises Avançadas com IA")
+analisar_apriori(df_trends, df_x)
+analisar_clusters(df_spotify, df_youtube)
