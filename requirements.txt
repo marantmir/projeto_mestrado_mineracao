@@ -6,3 +6,5 @@ google-api-python-client
 pytrends
 tweepy
 spotipy
+mlxtend
+scikit-learn
