@@ -2,6 +2,11 @@ import pandas as pd
 import requests
 import streamlit as st
 import base64
+import logging
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def autenticar_spotify():
     """
@@ -40,67 +45,78 @@ def autenticar_spotify():
 
 def coletar_dados_spotify():
     """
-    Coleta dados da playlist Top 50 Global do Spotify.
-    Lança uma exceção detalhada em caso de falha.
+    Coleta todas as músicas de uma playlist do Spotify, lidando com paginação.
+    Tenta múltiplas playlists como fallback em caso de falha.
     """
     token = autenticar_spotify()
     headers = {
         "Authorization": f"Bearer {token}"
     }
 
-    # ID da playlist Top 50 Global
-    playlist_id = "37i9dQZEVXbMDoHDwVN2tF"
-    url = f"https://api.spotify.com/v1/playlists/{playlist_id}"
+    # Lista de playlists para tentar
+    playlists = [
+        {"id": "37i9dQZEVXbMDoHDwVN2tF", "nome": "Top 50 Global", "market": "BR"},
+        {"id": "37i9dQZF1DX0FOF1IUWK1W", "nome": "Top Brasil", "market": "BR"},
+        {"id": "37i9dQZEVXbMDoHDwVN2tF", "nome": "Top 50 Global (sem market)", "market": None}
+    ]
 
-    # Parâmetro de mercado
-    params = {
-        "market": "BR"
-    }
+    for playlist in playlists:
+        playlist_id = playlist["id"]
+        playlist_nome = playlist["nome"]
+        market = playlist["market"]
 
-    # Exibir URL da requisição para depuração
-    st.write(f"URL da requisição: {url}?market=BR")
-    
-    response = requests.get(url, headers=headers, params=params)
+        url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
+        params = {"market": market} if market else {}
+        musicas = []
 
-    # Tratamento de erro aprimorado
-    if response.status_code != 200:
-        try:
-            error_details = response.json()
-        except requests.exceptions.JSONDecodeError:
-            error_details = response.text
-            
-        if response.status_code == 404:
+        # Log e exibir URL inicial da requisição
+        logger.info(f"Tentando coletar dados da playlist: {playlist_nome} (ID: {playlist_id}, Market: {market})")
+        st.write(f"URL inicial da requisição: {url}{'?market=' + market if market else ''}")
+
+        while url:
+            response = requests.get(url, headers=headers, params=params)
+
+            if response.status_code == 200:
+                dados = response.json()
+                items = dados.get("items", [])
+                
+                for item in items:
+                    if item and item.get("track"):
+                        track = item["track"]
+                        if track:
+                            musicas.append({
+                                "posição": len(musicas) + 1,
+                                "artista": track["artists"][0]["name"] if track["artists"] else "N/A",
+                                "musica": track["name"],
+                                "url": track["external_urls"]["spotify"]
+                            })
+
+                # Verificar se há mais páginas
+                url = dados.get("next")
+                if url:
+                    params = {}  # Limpar params para usar o URL de next diretamente
+                    logger.info(f"Buscando próxima página: {url}")
+                    st.write(f"Buscando próxima página: {url}")
+                continue
+
+            try:
+                error_details = response.json()
+            except requests.exceptions.JSONDecodeError:
+                error_details = response.text
+
             st.error(
-                f"Playlist não encontrada. Verifique se o ID '{playlist_id}' está correto ou se a playlist está disponível no mercado BR. "
-                "Tente acessar a playlist no Spotify com uma conta brasileira para confirmar sua disponibilidade. "
-                "Alternativamente, remova o parâmetro 'market' ou teste com outro mercado (ex.: 'US')."
+                f"Falha ao buscar dados da playlist {playlist_nome} (ID: {playlist_id}). "
+                f"Status: {response.status_code}, Detalhes: {error_details}"
             )
-            # Tentar sem o parâmetro market como fallback
-            st.write("Tentando sem o parâmetro 'market'...")
-            response = requests.get(url, headers=headers)
-            if response.status_code != 200:
-                try:
-                    error_details = response.json()
-                except requests.exceptions.JSONDecodeError:
-                    error_details = response.text
-                st.error(f"Falha ao buscar dados do Spotify sem market. Status: {response.status_code}, Detalhes: {error_details}")
-                raise Exception(f"Falha ao buscar dados do Spotify. Status: {response.status_code}, Detalhes: {error_details}")
-        else:
-            st.error(f"Falha ao buscar dados do Spotify. Status: {response.status_code}, Detalhes: {error_details}")
-            raise Exception(f"Falha ao buscar dados do Spotify. Status: {response.status_code}, Detalhes: {error_details}")
+            logger.error(f"Falha na playlist {playlist_nome}: Status {response.status_code}, Detalhes: {error_details}")
+            break  # Sair do loop de paginação e tentar a próxima playlist
 
-    dados = response.json()["tracks"]["items"]
+        if musicas:
+            st.success(f"Dados coletados com sucesso da playlist: {playlist_nome} ({len(musicas)} músicas)")
+            return pd.DataFrame(musicas)
 
-    musicas = []
-    for i, item in enumerate(dados):
-        if item and item.get("track"):
-            track = item["track"]
-            if track:
-                musicas.append({
-                    "posição": len(musicas) + 1,
-                    "artista": track["artists"][0]["name"] if track["artists"] else "N/A",
-                    "musica": track["name"],
-                    "url": track["external_urls"]["spotify"]
-                })
-
-    return pd.DataFrame(musicas)
+    st.error(
+        "Não foi possível coletar dados de nenhuma playlist. Verifique os IDs das playlists no Spotify "
+        "ou tente com uma conta brasileira. Alternativamente, contate o suporte do Spotify para desenvolvedores."
+    )
+    raise Exception("Falha ao coletar dados de todas as playlists tentadas.")
