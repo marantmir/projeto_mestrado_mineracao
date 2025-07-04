@@ -10,7 +10,7 @@ def coletar_dados_spotify():
     soup = BeautifulSoup(response.content, "html.parser")
 
     table = soup.find("table", {"class": "chart-table"})
-    linhas = table.find_all("tr")[1:]  # ignora header
+    linhas = table.find_all("tr")[1:]
 
     dados = []
     for linha in linhas:
