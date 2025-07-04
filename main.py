@@ -16,12 +16,12 @@ if "dados_carregados" not in st.session_state:
 
 if st.button("🔄 Coletar Novos Dados"):
     with st.spinner("Coletando dados de todas as plataformas..."):
-        df_spotify = coletar_dados_spotify()
+        #df_spotify = coletar_dados_spotify()
         df_youtube = coletar_dados_youtube()
         df_trends = coletar_dados_trends()
         df_x = coletar_dados_x()
 
-        salvar_df_em_tabela(df_spotify, "spotify")
+        #salvar_df_em_tabela(df_spotify, "spotify")
         salvar_df_em_tabela(df_youtube, "youtube")
         salvar_df_em_tabela(df_trends, "trends")
         salvar_df_em_tabela(df_x, "twitter")
@@ -31,7 +31,7 @@ if st.button("🔄 Coletar Novos Dados"):
     st.success("✅ Dados coletados e salvos com sucesso!")
 
 # Carregamento seguro
-df_spotify = carregar_tabela("spotify")
+#df_spotify = carregar_tabela("spotify")
 df_youtube = carregar_tabela("youtube")
 df_trends = carregar_tabela("trends")
 df_x = carregar_tabela("twitter")
