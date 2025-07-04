@@ -9,8 +9,8 @@ def autenticar_spotify():
     Lança uma exceção detalhada em caso de falha.
     """
     try:
-        client_id = "357485a80bca424a87d0c8a0b68080b5"
-        client_secret = "f1d1fe9d516c4fbf85c09d9c858a9535"
+        client_id = st.secrets["spotify"]["client_id"]
+        client_secret = st.secrets["spotify"]["client_secret"]
     except KeyError:
         st.error("As secrets do Spotify (client_id, client_secret) não foram configuradas corretamente no Streamlit Cloud.")
         raise Exception("Secrets do Spotify ausentes. Verifique a configuração em 'Manage app'.")
