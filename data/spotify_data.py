@@ -49,20 +49,16 @@ def coletar_dados_spotify():
         "Authorization": f"Bearer {token}"
     }
 
-    # Playlist Top 50 Global
-    # playlist_id = "37i9dQZEVXbMDoHDwVN2tF"
-    playlist_id = "37i9dQZEVXbMXbN3EUUhlg"
+    # Usar o ID correto da playlist Top 50 Global
+    playlist_id = "37i9dQZEVXbMDoHDwVN2tF"  # ID da playlist Top 50 Global
     url = f"https://api.spotify.com/v1/playlists/{playlist_id}"
 
-    # --- INÍCIO DA CORREÇÃO ---
-    # A API do Spotify exige um parâmetro de mercado para retornar os dados da playlist.
-    # Sem ele, a API retorna 404 Not Found.
+    # Parâmetro de mercado
     params = {
         "market": "BR"
     }
-    # Adicionamos o parâmetro 'params' à nossa requisição
+    
     response = requests.get(url, headers=headers, params=params)
-    # --- FIM DA CORREÇÃO ---
 
     # Tratamento de erro aprimorado
     if response.status_code != 200:
@@ -71,7 +67,11 @@ def coletar_dados_spotify():
         except requests.exceptions.JSONDecodeError:
             error_details = response.text
             
-        st.error(f"Falha ao buscar dados do Spotify. Status: {response.status_code}, Detalhes: {error_details}")
+        # Mensagem específica para erro 404
+        if response.status_code == 404:
+            st.error(f"Playlist não encontrada. Verifique se o ID '{playlist_id}' está correto ou se a playlist está disponível no mercado BR.")
+        else:
+            st.error(f"Falha ao buscar dados do Spotify. Status: {response.status_code}, Detalhes: {error_details}")
         raise Exception(f"Falha ao buscar dados do Spotify. Status: {response.status_code}, Detalhes: {error_details}")
 
     dados = response.json()["tracks"]["items"]
@@ -80,10 +80,9 @@ def coletar_dados_spotify():
     for i, item in enumerate(dados):
         if item and item.get("track"):
             track = item["track"]
-            # Adicionando uma verificação para o caso de uma música não estar disponível no mercado BR
             if track:
                 musicas.append({
-                    "posição": len(musicas) + 1, # Usar len() garante a posição correta se houver faixas nulas
+                    "posição": len(musicas) + 1,
                     "artista": track["artists"][0]["name"] if track["artists"] else "N/A",
                     "musica": track["name"],
                     "url": track["external_urls"]["spotify"]
