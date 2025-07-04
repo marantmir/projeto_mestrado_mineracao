@@ -8,3 +8,4 @@ tweepy
 spotipy
 mlxtend
 scikit-learn
+firebase-admin
