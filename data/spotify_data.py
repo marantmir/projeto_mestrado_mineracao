@@ -52,15 +52,22 @@ def coletar_dados_spotify():
     # Playlist Top 50 Global
     playlist_id = "37i9dQZEVXbMDoHDwVN2tF"
     url = f"https://api.spotify.com/v1/playlists/{playlist_id}"
-    response = requests.get(url, headers=headers)
+
+    # --- INÍCIO DA CORREÇÃO ---
+    # A API do Spotify exige um parâmetro de mercado para retornar os dados da playlist.
+    # Sem ele, a API retorna 404 Not Found.
+    params = {
+        "market": "BR"
+    }
+    # Adicionamos o parâmetro 'params' à nossa requisição
+    response = requests.get(url, headers=headers, params=params)
+    # --- FIM DA CORREÇÃO ---
 
     # Tratamento de erro aprimorado
     if response.status_code != 200:
         try:
-            # Tenta pegar os detalhes do erro em formato JSON
             error_details = response.json()
         except requests.exceptions.JSONDecodeError:
-            # Se não for JSON, pega o texto puro
             error_details = response.text
             
         st.error(f"Falha ao buscar dados do Spotify. Status: {response.status_code}, Detalhes: {error_details}")
@@ -70,23 +77,15 @@ def coletar_dados_spotify():
 
     musicas = []
     for i, item in enumerate(dados):
-        if item and item.get("track"): # Adiciona verificação para evitar erro se um item for nulo
+        if item and item.get("track"):
             track = item["track"]
-            musicas.append({
-                "posição": i + 1,
-                "artista": track["artists"][0]["name"] if track["artists"] else "N/A",
-                "musica": track["name"],
-                "url": track["external_urls"]["spotify"]
-            })
+            # Adicionando uma verificação para o caso de uma música não estar disponível no mercado BR
+            if track:
+                musicas.append({
+                    "posição": len(musicas) + 1, # Usar len() garante a posição correta se houver faixas nulas
+                    "artista": track["artists"][0]["name"] if track["artists"] else "N/A",
+                    "musica": track["name"],
+                    "url": track["external_urls"]["spotify"]
+                })
 
     return pd.DataFrame(musicas)
-
-# Exemplo de como usar no seu main.py
-# st.title("Top 50 Músicas do Spotify")
-# 
-# try:
-#     df_spotify = coletar_dados_spotify()
-#     st.dataframe(df_spotify)
-# except Exception as e:
-#     st.error("Ocorreu um erro ao carregar os dados. Veja os detalhes abaixo:")
-#     st.exception(e)
