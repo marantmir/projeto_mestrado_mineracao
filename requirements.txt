@@ -6,6 +6,6 @@ google-api-python-client
 pytrends
 tweepy
 spotipy
+beautifulsoup4
 mlxtend
 scikit-learn
-firebase-admin
