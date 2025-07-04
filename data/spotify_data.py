@@ -50,7 +50,8 @@ def coletar_dados_spotify():
     }
 
     # Playlist Top 50 Global
-    playlist_id = "37i9dQZEVXbMDoHDwVN2tF"
+    # playlist_id = "37i9dQZEVXbMDoHDwVN2tF"
+    playlist_id = "37i9dQZEVXbMXbN3EUUhlg"
     url = f"https://api.spotify.com/v1/playlists/{playlist_id}"
 
     # --- INÍCIO DA CORREÇÃO ---
