@@ -11,6 +11,12 @@ def salvar_df_em_tabela(df, nome_tabela):
 
 def carregar_tabela(nome_tabela):
     conn = conectar_db()
-    df = pd.read_sql(f"SELECT * FROM {nome_tabela}", conn)
-    conn.close()
+    try:
+        df = pd.read_sql(f"SELECT * FROM {nome_tabela}", conn)
+    except Exception as e:
+        st.error(f"Erro ao carregar tabela '{nome_tabela}': {e}")
+        df = pd.DataFrame()  # Retorna dataframe vazio para evitar travamento do app
+    finally:
+        conn.close()
     return df
+
