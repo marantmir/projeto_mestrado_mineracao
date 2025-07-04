@@ -73,4 +73,34 @@ def coletar_dados_spotify():
             st.error(
                 f"Playlist não encontrada. Verifique se o ID '{playlist_id}' está correto ou se a playlist está disponível no mercado BR. "
                 "Tente acessar a playlist no Spotify com uma conta brasileira para confirmar sua disponibilidade. "
-               
+                "Alternativamente, remova o parâmetro 'market' ou teste com outro mercado (ex.: 'US')."
+            )
+            # Tentar sem o parâmetro market como fallback
+            st.write("Tentando sem o parâmetro 'market'...")
+            response = requests.get(url, headers=headers)
+            if response.status_code != 200:
+                try:
+                    error_details = response.json()
+                except requests.exceptions.JSONDecodeError:
+                    error_details = response.text
+                st.error(f"Falha ao buscar dados do Spotify sem market. Status: {response.status_code}, Detalhes: {error_details}")
+                raise Exception(f"Falha ao buscar dados do Spotify. Status: {response.status_code}, Detalhes: {error_details}")
+        else:
+            st.error(f"Falha ao buscar dados do Spotify. Status: {response.status_code}, Detalhes: {error_details}")
+            raise Exception(f"Falha ao buscar dados do Spotify. Status: {response.status_code}, Detalhes: {error_details}")
+
+    dados = response.json()["tracks"]["items"]
+
+    musicas = []
+    for i, item in enumerate(dados):
+        if item and item.get("track"):
+            track = item["track"]
+            if track:
+                musicas.append({
+                    "posição": len(musicas) + 1,
+                    "artista": track["artists"][0]["name"] if track["artists"] else "N/A",
+                    "musica": track["name"],
+                    "url": track["external_urls"]["spotify"]
+                })
+
+    return pd.DataFrame(musicas)
