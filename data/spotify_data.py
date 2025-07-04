@@ -30,7 +30,6 @@ def autenticar_spotify():
     url = "https://accounts.spotify.com/api/token"
     response = requests.post(url, headers=headers, data=data)
 
-    # Tratamento de erro aprimorado
     if response.status_code != 200:
         error_details = response.json()
         st.error(f"Falha na autenticação com o Spotify. Status: {response.status_code}, Detalhes: {error_details}")
@@ -49,14 +48,17 @@ def coletar_dados_spotify():
         "Authorization": f"Bearer {token}"
     }
 
-    # Usar o ID correto da playlist Top 50 Global
-    playlist_id = "37i9dQZEVXbMDoHDwVN2tF"  # ID da playlist Top 50 Global
+    # ID da playlist Top 50 Global
+    playlist_id = "37i9dQZEVXbMDoHDwVN2tF"
     url = f"https://api.spotify.com/v1/playlists/{playlist_id}"
 
     # Parâmetro de mercado
     params = {
         "market": "BR"
     }
+
+    # Exibir URL da requisição para depuração
+    st.write(f"URL da requisição: {url}?market=BR")
     
     response = requests.get(url, headers=headers, params=params)
 
@@ -67,25 +69,8 @@ def coletar_dados_spotify():
         except requests.exceptions.JSONDecodeError:
             error_details = response.text
             
-        # Mensagem específica para erro 404
         if response.status_code == 404:
-            st.error(f"Playlist não encontrada. Verifique se o ID '{playlist_id}' está correto ou se a playlist está disponível no mercado BR.")
-        else:
-            st.error(f"Falha ao buscar dados do Spotify. Status: {response.status_code}, Detalhes: {error_details}")
-        raise Exception(f"Falha ao buscar dados do Spotify. Status: {response.status_code}, Detalhes: {error_details}")
-
-    dados = response.json()["tracks"]["items"]
-
-    musicas = []
-    for i, item in enumerate(dados):
-        if item and item.get("track"):
-            track = item["track"]
-            if track:
-                musicas.append({
-                    "posição": len(musicas) + 1,
-                    "artista": track["artists"][0]["name"] if track["artists"] else "N/A",
-                    "musica": track["name"],
-                    "url": track["external_urls"]["spotify"]
-                })
-
-    return pd.DataFrame(musicas)
+            st.error(
+                f"Playlist não encontrada. Verifique se o ID '{playlist_id}' está correto ou se a playlist está disponível no mercado BR. "
+                "Tente acessar a playlist no Spotify com uma conta brasileira para confirmar sua disponibilidade. "
+               
