@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 def coletar_dados_x(max_retries=3, retry_delay=5):
     """
-    Coleta dados de tendências do X usando a API v2.
+    Coleta dados de tendências do X usando a API v1.1.
     Implementa retentativas para lidar com limites de taxa ou erros intermitentes.
     """
     try:
@@ -24,8 +24,8 @@ def coletar_dados_x(max_retries=3, retry_delay=5):
         "Authorization": f"Bearer {bearer_token}"
     }
 
-    # Endpoint de tendências do X (usando API v2, ajustar WOEID para Brasil)
-    url = "https://api.twitter.com/2/trends/place?id=23424768"  # WOEID 23424768 é Brasil
+    # Endpoint de tendências do X v1.1 (WOEID 23424768 é Brasil)
+    url = "https://api.twitter.com/1.1/trends/place.json?id=23424768"
     params = {}
 
     for attempt in range(max_retries):
@@ -38,36 +38,24 @@ def coletar_dados_x(max_retries=3, retry_delay=5):
             if response.status_code == 200:
                 data = response.json()
                 # Verificar se a resposta contém a estrutura esperada
-                trends = data.get("data", {}).get("trends", [])
-                if not trends:
-                    # Tentar endpoint v1.1 como fallback
-                    url_v1 = "https://api.twitter.com/1.1/trends/place.json?id=23424768"
-                    response_v1 = requests.get(url_v1, headers=headers, params=params)
-                    if response_v1.status_code == 200:
-                        data_v1 = response_v1.json()
-                        if isinstance(data_v1, list) and len(data_v1) > 0 and "trends" in data_v1[0]:
-                            trends = data_v1[0]["trends"]
-                        else:
-                            st.error("Resposta da API v1.1 do X não contém 'trends' ou está vazia.")
-                            logger.error("Resposta da API v1.1 do X não contém 'trends' ou está vazia.")
-                            return pd.DataFrame(columns=["termo", "volume"])
-                    else:
-                        st.error(f"Falha no endpoint v1.1: Status {response_v1.status_code}")
-                        logger.error(f"Falha no endpoint v1.1: Status {response_v1.status_code}")
-                        return pd.DataFrame(columns=["termo", "volume"])
-
-                trends_list = [
-                    {
-                        "termo": trend.get("name", "N/A"),
-                        "volume": trend.get("tweet_volume", 0)
-                    }
-                    for trend in trends
-                    if trend.get("name")
-                ]
-                df = pd.DataFrame(trends_list)
-                st.success(f"Dados de tendências do X coletados com sucesso: {len(df)} termos")
-                logger.info(f"Sucesso: {len(df)} termos coletados do X")
-                return df
+                if isinstance(data, list) and len(data) > 0 and "trends" in data[0]:
+                    trends = data[0]["trends"]
+                    trends_list = [
+                        {
+                            "termo": trend.get("name", "N/A"),
+                            "volume": trend.get("tweet_volume", 0)
+                        }
+                        for trend in trends
+                        if trend.get("name")
+                    ]
+                    df = pd.DataFrame(trends_list)
+                    st.success(f"Dados de tendências do X coletados com sucesso: {len(df)} termos")
+                    logger.info(f"Sucesso: {len(df)} termos coletados do X")
+                    return df
+                else:
+                    st.error("Resposta da API do X não contém 'trends' ou está vazia.")
+                    logger.error("Resposta da API do X não contém 'trends' ou está vazia.")
+                    return pd.DataFrame(columns=["termo", "volume"])
 
             try:
                 error_details = response.json()
