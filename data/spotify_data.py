@@ -3,6 +3,7 @@ import requests
 import streamlit as st
 import base64
 import logging
+import time
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -43,80 +44,103 @@ def autenticar_spotify():
     token = response.json()["access_token"]
     return token
 
-def coletar_dados_spotify():
+def coletar_dados_spotify(max_retries=3, retry_delay=2, max_tracks=1000):
     """
-    Coleta todas as músicas de uma playlist do Spotify, lidando com paginação.
-    Tenta múltiplas playlists como fallback em caso de falha.
+    Coleta todas as músicas possíveis do Spotify usando busca com paginação.
+    Usa múltiplas queries para maximizar o número de faixas coletadas.
     """
     token = autenticar_spotify()
     headers = {
         "Authorization": f"Bearer {token}"
     }
 
-    # Lista de playlists para tentar
-    playlists = [
-        {"id": "37i9dQZEVXbMDoHDwVN2tF", "nome": "Top 50 Global", "market": "BR"},
-        {"id": "37i9dQZF1DX0FOF1IUWK1W", "nome": "Top Brasil", "market": "BR"},
-        {"id": "37i9dQZEVXbMDoHDwVN2tF", "nome": "Top 50 Global (sem market)", "market": None}
+    # Lista de queries para buscar músicas (ex.: por gênero e ano atual)
+    queries = [
+        {"query": "year:2025", "nome": "Músicas de 2025", "market": "BR"},
+        {"query": "genre:pop", "nome": "Músicas Pop", "market": "BR"},
+        {"query": "genre:rock", "nome": "Músicas Rock", "market": "BR"},
+        {"query": "*", "nome": "Todas as Músicas (sem filtro)", "market": None}
     ]
 
-    for playlist in playlists:
-        playlist_id = playlist["id"]
-        playlist_nome = playlist["nome"]
-        market = playlist["market"]
+    musicas = []
+    max_offset = 1000  # Limite máximo de offset da API do Spotify
+    limit = 50  # Máximo de faixas por requisição
 
-        url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
-        params = {"market": market} if market else {}
-        musicas = []
+    for query_info in queries:
+        query = query_info["query"]
+        query_nome = query_info["nome"]
+        market = query_info["market"]
 
-        # Log e exibir URL inicial da requisição
-        logger.info(f"Tentando coletar dados da playlist: {playlist_nome} (ID: {playlist_id}, Market: {market})")
-        st.write(f"URL inicial da requisição: {url}{'?market=' + market if market else ''}")
+        logger.info(f"Tentando coletar músicas com query: {query_nome} (Query: {query}, Market: {market})")
+        st.write(f"Coletando músicas com query: {query_nome} (Market: {market})")
 
-        while url:
-            response = requests.get(url, headers=headers, params=params)
+        offset = 0
+        while offset < max_offset and len(musicas) < max_tracks:
+            params = {
+                "q": query,
+                "type": "track",
+                "limit": limit,
+                "offset": offset
+            }
+            if market:
+                params["market"] = market
 
-            if response.status_code == 200:
-                dados = response.json()
-                items = dados.get("items", [])
-                
-                for item in items:
-                    if item and item.get("track"):
-                        track = item["track"]
-                        if track:
+            url = "https://api.spotify.com/v1/search"
+            st.write(f"URL da requisição: {url}?q={query}&type=track&limit={limit}&offset={offset}{'&market=' + market if market else ''}")
+
+            for attempt in range(max_retries):
+                response = requests.get(url, headers=headers, params=params)
+
+                if response.status_code == 200:
+                    dados = response.json()
+                    items = dados.get("tracks", {}).get("items", [])
+
+                    for item in items:
+                        if item and len(musicas) < max_tracks:
                             musicas.append({
                                 "posição": len(musicas) + 1,
-                                "artista": track["artists"][0]["name"] if track["artists"] else "N/A",
-                                "musica": track["name"],
-                                "url": track["external_urls"]["spotify"]
+                                "artista": item["artists"][0]["name"] if item["artists"] else "N/A",
+                                "musica": item["name"],
+                                "url": item["external_urls"]["spotify"]
                             })
 
-                # Verificar se há mais páginas
-                url = dados.get("next")
-                if url:
-                    params = {}  # Limpar params para usar o URL de next diretamente
-                    logger.info(f"Buscando próxima página: {url}")
-                    st.write(f"Buscando próxima página: {url}")
-                continue
+                    total_results = dados.get("tracks", {}).get("total", 0)
+                    offset += limit
+                    if offset >= total_results or offset >= max_offset:
+                        break
+                    break  # Sucesso, sair do loop de retentativas
 
-            try:
-                error_details = response.json()
-            except requests.exceptions.JSONDecodeError:
-                error_details = response.text
+                try:
+                    error_details = response.json()
+                except requests.exceptions.JSONDecodeError:
+                    error_details = response.text
 
-            st.error(
-                f"Falha ao buscar dados da playlist {playlist_nome} (ID: {playlist_id}). "
-                f"Status: {response.status_code}, Detalhes: {error_details}"
-            )
-            logger.error(f"Falha na playlist {playlist_nome}: Status {response.status_code}, Detalhes: {error_details}")
-            break  # Sair do loop de paginação e tentar a próxima playlist
+                st.error(
+                    f"Tentativa {attempt + 1}/{max_retries} falhou para query {query_nome}. "
+                    f"Status: {response.status_code}, Detalhes: {error_details}"
+                )
+                logger.error(f"Tentativa {attempt + 1}/{max_retries} falhou para query {query_nome}: Status {response.status_code}, Detalhes: {error_details}")
+
+                if attempt < max_retries - 1:
+                    st.write(f"Aguardando {retry_delay} segundos antes da próxima tentativa...")
+                    time.sleep(retry_delay)
+                else:
+                    st.error(f"Não foi possível coletar dados para query {query_nome} após {max_retries} tentativas.")
+                    break
+
+            if len(musicas) >= max_tracks:
+                break
 
         if musicas:
-            st.success(f"Dados coletados com sucesso da playlist: {playlist_nome} ({len(musicas)} músicas)")
+            st.success(f"Dados coletados com sucesso: {len(musicas)} músicas usando query {query_nome}")
             return pd.DataFrame(musicas)
 
+    if musicas:
+        st.success(f"Dados coletados com sucesso: {len(musicas)} músicas")
+        return pd.DataFrame(musicas)
+
     st.error(
-        "Não foi possível coletar dados de nenhuma playlist. Verifique os IDs das playlists no Spotify "
-        "ou tente com uma conta brasileira. Alternativamente, contate o suporte do Spotify para desenvolvedores."
+        "Não foi possível coletar músicas com nenhuma query. Verifique as credenciais do Spotify, "
+        "a conectividade com a API, ou contate o suporte do Spotify para desenvolvedores."
     )
-    raise Exception("Falha ao coletar dados de todas as playlists tentadas.")
+    raise Exception("Falha ao coletar músicas com todas as queries tentadas.")
