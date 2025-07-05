@@ -10,7 +10,7 @@ try:
     from data.youtube_data import coletar_dados_youtube
     from data.google_trends import coletar_dados_trends
     from data.x_data import coletar_dados_x
-    from data.firebase_manager import salvar_df_firestore, carregar_tabela
+    from data.firebase_manager import salvar_df_firestore, carregar_df_firestore
     from insights.visualizacoes import gerar_visoes
     from insights.aprendizado import analisar_apriori, analisar_clusters
 except ImportError as e:
