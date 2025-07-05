@@ -9,3 +9,5 @@ spotipy
 beautifulsoup4
 mlxtend
 scikit-learn
+pytrends>=4.9.2
+requests>=2.25.0
