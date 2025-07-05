@@ -1,78 +1,41 @@
-from pytrends.request import TrendReq
 import pandas as pd
-import streamlit as st
-import time
 import logging
-import requests
-try:
-    from curl_cffi import requests as cffi_requests
-except ImportError:
-    cffi_requests = requests  # Fallback para requests padrão se curl_cffi não estiver disponível
+from pytrends.request import TrendReq
+import time
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def get_google_cookies(impersonate_version='chrome110'):
-    """Obtém cookies para simular um navegador."""
+def coletar_dados_trends():
     try:
-        session = cffi_requests.Session()
-        response = session.get("https://www.google.com", impersonate=impersonate_version)
-        return session.cookies.get_dict()
-    except Exception as e:
-        logger.error(f"Erro ao obter cookies: {str(e)}")
-        return {}
-
-def coletar_dados_trends(max_retries=3, retry_delay=5):
-    """
-    Coleta dados de tendências do Google Trends para o Brasil.
-    Usa cookies e retentativas para evitar bloqueios e erros de endpoint.
-    """
-    try:
-        # Inicializar pytrends com cookies
-        requests_args = {'cookies': get_google_cookies()}
-        pytrends = TrendReq(hl='pt-BR', tz=-180, requests_args=requests_args)
+        # Inicializar pytrends
+        pytrends = TrendReq(hl='pt-BR', tz=360)
         
-        for attempt in range(max_retries):
-            try:
-                logger.info(f"Tentativa {attempt + 1}/{max_retries} de coletar tendências do Google Trends para o Brasil")
-                st.write(f"Tentando coletar tendências do Google Trends (Tentativa {attempt + 1}/{max_retries})...")
-                
-                # Tentar coletar termos de pesquisa em alta
-                trending_df = pytrends.trending_searches(pn="brazil")
-                trending_df.columns = ["termo"]
-                
-                # Se trending_searches falhar, tentar interest_over_time
-                if trending_df.empty or len(trending_df) == 0:
-                    logger.warning("trending_searches retornou DataFrame vazio. Tentando interest_over_time...")
-                    pytrends.build_payload(kw_list=["música"], timeframe="now 7-d", geo="BR")
-                    trending_df = pytrends.interest_over_time()
-                    if not trending_df.empty:
-                        trending_df = pd.DataFrame({"termo": ["música"]})
-                    else:
-                        trending_df = pd.DataFrame(columns=["termo"])
-                
-                st.success(f"Dados de tendências coletados com sucesso: {len(trending_df)} termos")
-                logger.info(f"Sucesso: {len(trending_df)} termos coletados")
+        # Tentar coletar trending searches
+        logger.info("Tentativa 1/3 de coletar tendências do Google Trends para o Brasil")
+        try:
+            trending_df = pytrends.trending_searches(pn="brazil")
+            trending_df.columns = ["termo"]
+            if not trending_df.empty:
+                logger.info(f"Dados coletados do Google Trends: {len(trending_df)} termos")
                 return trending_df
-                
-            except Exception as e:
-                st.error(f"Tentativa {attempt + 1}/{max_retries} falhou: {str(e)}")
-                logger.error(f"Tentativa {attempt + 1}/{max_retries} falhou: {str(e)}")
-                
-                if attempt < max_retries - 1:
-                    st.write(f"Aguardando {retry_delay} segundos antes da próxima tentativa...")
-                    time.sleep(retry_delay)
-                continue
+        except Exception as e:
+            logger.error(f"Tentativa 1/3 falhou: {str(e)}")
 
-        st.error(
-            "Não foi possível coletar dados do Google Trends após várias tentativas. "
-            "Verifique a conexão com a API ou contate o suporte do Google Trends."
-        )
-        logger.error("Falha ao coletar dados do Google Trends após todas as tentativas")
-        return pd.DataFrame(columns=["termo"])  # Retorna DataFrame vazio como fallback
+        # Fallback para interest_over_time com termos genéricos
+        logger.info("Tentando fallback com interest_over_time")
+        keywords = ["música", "cultura", "tendências"]
+        pytrends.build_payload(kw_list=keywords, timeframe='now 7-d', geo='BR')
+        df = pytrends.interest_over_time()
+        if not df.empty:
+            df = df.reset_index()
+            logger.info(f"Dados coletados via interest_over_time: {len(df)} registros")
+            return df
+        else:
+            logger.warning("Nenhum dado retornado por interest_over_time")
+            return pd.DataFrame()
 
     except Exception as e:
-        st.error(f"Erro ao inicializar o Google Trends: {str(e)}")
-        logger.error(f"Erro ao inicializar o Google Trends: {str(e)}")
-        return pd.DataFrame(columns=["termo"])  # Retorna DataFrame vazio como fallback
+        logger.error(f"Falha ao coletar dados do Google Trends após todas as tentativas: {str(e)}")
+        return pd.DataFrame()
