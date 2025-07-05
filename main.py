@@ -59,7 +59,7 @@ if st.button("🔄 Coletar Novos Dados"):
             st.session_state.dados_carregados = False
 
 @st.cache_data
-def carregar_tabelas():
+def carregar_df_firestore():
     try:
         return {
             "spotify": carregar_df_firestore("spotify"),
