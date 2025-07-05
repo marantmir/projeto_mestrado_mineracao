@@ -1,9 +1,7 @@
 streamlit
 pandas
-requests
 plotly
 google-api-python-client
-pytrends
 tweepy
 spotipy
 beautifulsoup4
@@ -11,3 +9,5 @@ mlxtend
 scikit-learn
 pytrends>=4.9.2
 requests>=2.25.0
+pytrends>=4.9.2
+urllib3<2.0
