@@ -10,7 +10,7 @@ try:
     from data.youtube_data import coletar_dados_youtube
     from data.google_trends import coletar_dados_trends
     from data.x_data import coletar_dados_x
-    from data.supabase_manager import salvar_df_firestore, carregar_df_firestore
+    from data.supabase_manager import salvar_df_supabase, carregar_df_supabase
     from insights.visualizacoes import gerar_visoes
     from insights.aprendizado import analisar_apriori, analisar_clusters
 except ImportError as e:
@@ -44,7 +44,7 @@ if st.button("🔄 Coletar Novos Dados"):
                 elif df.empty:
                     st.warning(f"Dados de {name} estão vazios. Verifique APIs ou conexão.")
                 else:
-                    salvar_df_firestore(df, name)
+                    salvar_df_supabase(df, name)
                     st.success(f"Dados de {name} salvos: {len(df)} registros.")
             if all_valid:
                 st.session_state.dados_carregados = True
@@ -62,10 +62,10 @@ if st.button("🔄 Coletar Novos Dados"):
 def carregar_tabelas():
     try:
         return {
-            "spotify": carregar_df_firestore("spotify", ["nome", "artista", "popularidade"]),
-            "youtube": carregar_df_firestore("youtube", ["titulo", "canal", "visualizacoes"]),
-            "trends": carregar_df_firestore("trends", ["termo"]),
-            "twitter": carregar_df_firestore("twitter", ["assunto", "volume", "created_at"])
+            "spotify": carregar_df_supabase("spotify", ["nome", "artista", "popularidade"]),
+            "youtube": carregar_df_supabase("youtube", ["titulo", "canal", "visualizacoes"]),
+            "trends": carregar_df_supabase("trends", ["termo"]),
+            "twitter": carregar_df_supabase("twitter", ["assunto", "volume", "created_at"])
         }
     except Exception as e:
         st.error(f"Erro ao carregar tabelas: {str(e)}")
