@@ -1,61 +1,43 @@
-import tweepy
 import pandas as pd
-import streamlit as st
-import time
+import tweepy
 import logging
+import streamlit as st
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def coletar_dados_x(max_retries=3, retry_delay=5):
-    """
-    Coleta dados de tendências do X usando a API v1.1 via tweepy.
-    """
+def coletar_dados_x():
     try:
-        # Configurar credenciais
+        # Carregar credenciais do secrets.toml
         bearer_token = st.secrets["x"]["bearer_token"]
+        
+        # Inicializar cliente Tweepy
         client = tweepy.Client(bearer_token=bearer_token)
-    except KeyError:
-        st.error("A secret 'bearer_token' do X não foi configurada corretamente no Streamlit Cloud.")
-        logger.error("Secret do X ausente.")
-        return pd.DataFrame(columns=["termo", "volume"])
+        
+        logger.info("Tentativa 1/3 de coletar tweets recentes do X")
+        query = "from:Brazil -is:retweet"  # Buscar tweets do Brasil, excluindo retweets
+        tweets = client.search_recent_tweets(
+            query=query,
+            max_results=100,
+            tweet_fields=["public_metrics", "created_at"]
+        )
+        
+        if tweets.data:
+            data = []
+            for tweet in tweets.data:
+                data.append({
+                    "assunto": tweet.text,
+                    "volume": tweet.public_metrics.get("impression_count", 0),
+                    "created_at": tweet.created_at
+                })
+            df = pd.DataFrame(data)
+            logger.info(f"Dados coletados do X: {len(df)} tweets")
+            return df
+        else:
+            logger.warning("Nenhum tweet retornado pela busca")
+            return pd.DataFrame()
 
-    woeid = 23424768  # WOEID do Brasil
-    for attempt in range(max_retries):
-        try:
-            logger.info(f"Tentativa {attempt + 1}/{max_retries} de coletar tendências do X")
-            st.write(f"Tentando coletar tendências do X (Tentativa {attempt + 1}/{max_retries})...")
-
-            trends = client.get_place_trends(woeid)
-            if trends and isinstance(trends, list) and len(trends) > 0 and "trends" in trends[0]:
-                trends_list = [
-                    {
-                        "termo": trend.get("name", "N/A"),
-                        "volume": trend.get("tweet_volume", 0)
-                    }
-                    for trend in trends[0]["trends"]
-                    if trend.get("name")
-                ]
-                df = pd.DataFrame(trends_list)
-                st.success(f"Dados de tendências do X coletados com sucesso: {len(df)} termos")
-                logger.info(f"Sucesso: {len(df)} termos coletados do X")
-                return df
-            else:
-                st.error("Resposta da API do X não contém 'trends' ou está vazia.")
-                logger.error("Resposta da API do X não contém 'trends' ou está vazia.")
-                return pd.DataFrame(columns=["termo", "volume"])
-
-        except tweepy.TweepyException as e:
-            st.error(f"Tentativa {attempt + 1}/{max_retries} falhou: {str(e)}")
-            logger.error(f"Tentativa {attempt + 1}/{max_retries} falhou: {str(e)}")
-            if attempt < max_retries - 1:
-                st.write(f"Aguardando {retry_delay} segundos antes da próxima tentativa...")
-                time.sleep(retry_delay)
-
-    st.error(
-        "Não foi possível coletar dados do X após várias tentativas. "
-        "Verifique as credenciais da API do X ou contate o suporte."
-    )
-    logger.error("Falha ao coletar dados do X após todas as tentativas")
-    return pd.DataFrame(columns=["termo", "volume"])
+    except Exception as e:
+        logger.error(f"Falha ao coletar dados do X: {str(e)}")
+        return pd.DataFrame()
