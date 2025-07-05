@@ -4,7 +4,10 @@ import streamlit as st
 import time
 import logging
 import requests
-from curl_cffi import requests as cffi_requests
+try:
+    from curl_cffi import requests as cffi_requests
+except ImportError:
+    cffi_requests = requests  # Fallback para requests padrão se curl_cffi não estiver disponível
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -13,12 +16,12 @@ logger = logging.getLogger(__name__)
 def get_google_cookies(impersonate_version='chrome110'):
     """Obtém cookies para simular um navegador."""
     try:
-        with cffi_requests.Session() as session:
-            session.get("https://www.google.com", impersonate=impersonate_version)
-            return session.cookies
+        session = cffi_requests.Session()
+        response = session.get("https://www.google.com", impersonate=impersonate_version)
+        return session.cookies.get_dict()
     except Exception as e:
         logger.error(f"Erro ao obter cookies: {str(e)}")
-        return None
+        return {}
 
 def coletar_dados_trends(max_retries=3, retry_delay=5):
     """
@@ -26,8 +29,9 @@ def coletar_dados_trends(max_retries=3, retry_delay=5):
     Usa cookies e retentativas para evitar bloqueios e erros de endpoint.
     """
     try:
-        # Inicializar pytrends com configurações para Brasil
-        pytrends = TrendReq(hl='pt-BR', tz=-180, requests_args={'cookies': get_google_cookies()})
+        # Inicializar pytrends com cookies
+        requests_args = {'cookies': get_google_cookies()}
+        pytrends = TrendReq(hl='pt-BR', tz=-180, requests_args=requests_args)
         
         for attempt in range(max_retries):
             try:
@@ -38,8 +42,8 @@ def coletar_dados_trends(max_retries=3, retry_delay=5):
                 trending_df = pytrends.trending_searches(pn="brazil")
                 trending_df.columns = ["termo"]
                 
-                # Se trending_searches falhar, tentar interest_over_time com um termo genérico
-                if trending_df.empty:
+                # Se trending_searches falhar, tentar interest_over_time
+                if trending_df.empty or len(trending_df) == 0:
                     logger.warning("trending_searches retornou DataFrame vazio. Tentando interest_over_time...")
                     pytrends.build_payload(kw_list=["música"], timeframe="now 7-d", geo="BR")
                     trending_df = pytrends.interest_over_time()
