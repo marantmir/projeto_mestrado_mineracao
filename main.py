@@ -33,7 +33,7 @@ if "dados_carregados" not in st.session_state:
 if st.button("🔄 Coletar Novos Dados"):
     with st.spinner("Coletando dados de todas as plataformas..."):
         try:
-            # Coletar dados com tratamento de falhas
+            # Coletar dados com tratamento de erros
             df_spotify = coletar_dados_spotify()
             df_youtube = coletar_dados_youtube()
             df_trends = coletar_dados_trends()
@@ -64,7 +64,8 @@ if st.button("🔄 Coletar Novos Dados"):
                 st.session_state.dados_carregados = True
                 st.success("✅ Todos os dados foram coletados e salvos com sucesso!")
             else:
-                st.warning("Alguns dados não foram coletados corretamente. Verifique os logs para detalhes.")
+                st.session_state.dados_carregados = True  # Permitir visualizações mesmo com falhas parciais
+                st.warning("Alguns dados não foram coletados corretamente. Visualizações serão geradas com dados disponíveis.")
 
         except Exception as e:
             st.error(f"Erro durante a coleta de dados: {str(e)}")
@@ -94,19 +95,18 @@ for table, df in [("Spotify", df_spotify), ("YouTube", df_youtube), ("Google Tre
     else:
         st.info(f"Sem dados disponíveis para {table}. Clique em '🔄 Coletar Novos Dados' para tentar novamente.")
 
-# Executar análises avançadas apenas se todos os DataFrames forem válidos
-if (st.session_state.dados_carregados and 
-    isinstance(df_spotify, pd.DataFrame) and not df_spotify.empty and
-    isinstance(df_youtube, pd.DataFrame) and not df_youtube.empty and
-    isinstance(df_trends, pd.DataFrame) and not df_trends.empty and
-    isinstance(df_x, pd.DataFrame) and not df_x.empty):
+# Gerar visualizações mesmo com dados parciais
+if st.session_state.dados_carregados:
     try:
-        st.header("📈 Visualizações")
+        st.header("📈 Visualizações e Insights")
         gerar_visoes(df_spotify, df_youtube, df_trends, df_x)
 
-        st.header("🧠 Análises Avançadas com IA")
-        analisar_apriori(df_trends, df_x)
-        analisar_clusters(df_spotify, df_youtube)
+        # Análises avançadas apenas se houver dados suficientes
+        if isinstance(df_trends, pd.DataFrame) and not df_trends.empty and isinstance(df_x, pd.DataFrame) and not df_x.empty:
+            st.header("🧠 Análises Avançadas com IA")
+            analisar_apriori(df_trends, df_x)
+        if isinstance(df_spotify, pd.DataFrame) and not df_spotify.empty and isinstance(df_youtube, pd.DataFrame) and not df_youtube.empty:
+            analisar_clusters(df_spotify, df_youtube)
     except Exception as e:
         st.error(f"Erro ao gerar visualizações ou análises: {str(e)}")
         logger.error(f"Erro ao gerar visualizações ou análises: {str(e)}")
