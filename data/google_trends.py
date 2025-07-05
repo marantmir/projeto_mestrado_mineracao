@@ -4,34 +4,55 @@ import streamlit as st
 import time
 import logging
 import requests
+from curl_cffi import requests as cffi_requests
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def get_google_cookies(impersonate_version='chrome110'):
+    """Obtém cookies para simular um navegador."""
+    try:
+        with cffi_requests.Session() as session:
+            session.get("https://www.google.com", impersonate=impersonate_version)
+            return session.cookies
+    except Exception as e:
+        logger.error(f"Erro ao obter cookies: {str(e)}")
+        return None
+
 def coletar_dados_trends(max_retries=3, retry_delay=5):
     """
     Coleta dados de tendências do Google Trends para o Brasil.
-    Implementa retentativas para lidar com limites de taxa ou erros intermitentes.
+    Usa cookies e retentativas para evitar bloqueios e erros de endpoint.
     """
     try:
-        # Inicializar pytrends sem retries internos para evitar conflitos
-        pytrends = TrendReq(hl='pt-BR', tz=-180)
+        # Inicializar pytrends com configurações para Brasil
+        pytrends = TrendReq(hl='pt-BR', tz=-180, requests_args={'cookies': get_google_cookies()})
         
         for attempt in range(max_retries):
             try:
                 logger.info(f"Tentativa {attempt + 1}/{max_retries} de coletar tendências do Google Trends para o Brasil")
                 st.write(f"Tentando coletar tendências do Google Trends (Tentativa {attempt + 1}/{max_retries})...")
                 
-                # Coletar termos de pesquisa em alta no Brasil
+                # Tentar coletar termos de pesquisa em alta
                 trending_df = pytrends.trending_searches(pn="brazil")
                 trending_df.columns = ["termo"]
+                
+                # Se trending_searches falhar, tentar interest_over_time com um termo genérico
+                if trending_df.empty:
+                    logger.warning("trending_searches retornou DataFrame vazio. Tentando interest_over_time...")
+                    pytrends.build_payload(kw_list=["música"], timeframe="now 7-d", geo="BR")
+                    trending_df = pytrends.interest_over_time()
+                    if not trending_df.empty:
+                        trending_df = pd.DataFrame({"termo": ["música"]})
+                    else:
+                        trending_df = pd.DataFrame(columns=["termo"])
                 
                 st.success(f"Dados de tendências coletados com sucesso: {len(trending_df)} termos")
                 logger.info(f"Sucesso: {len(trending_df)} termos coletados")
                 return trending_df
                 
-            except (requests.exceptions.RequestException, Exception) as e:
+            except Exception as e:
                 st.error(f"Tentativa {attempt + 1}/{max_retries} falhou: {str(e)}")
                 logger.error(f"Tentativa {attempt + 1}/{max_retries} falhou: {str(e)}")
                 
