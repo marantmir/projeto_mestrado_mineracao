@@ -44,7 +44,7 @@ if st.button("🔄 Coletar Novos Dados"):
                 elif df.empty:
                     st.warning(f"Dados de {name} estão vazios. Verifique APIs ou conexão.")
                 else:
-                    salvar_df_em_tabela(df, name)
+                    salvar_df_firestore(df, name)
                     st.success(f"Dados de {name} salvos: {len(df)} registros.")
             if all_valid:
                 st.session_state.dados_carregados = True
@@ -62,17 +62,17 @@ if st.button("🔄 Coletar Novos Dados"):
 def carregar_tabelas():
     try:
         return {
-            "spotify": carregar_tabela("spotify"),
-            "youtube": carregar_tabela("youtube"),
-            "trends": carregar_tabela("trends"),
-            "twitter": carregar_tabela("twitter")
+            "spotify": carregar_df_firestore("spotify"),
+            "youtube": carregar_df_firestore("youtube"),
+            "trends": carregar_df_firestore("trends"),
+            "twitter": carregar_df_firestore("twitter")
         }
     except Exception as e:
         st.error(f"Erro ao carregar tabelas: {str(e)}")
         logger.error(f"Erro ao carregar tabelas: {str(e)}")
         return {"spotify": pd.DataFrame(), "youtube": pd.DataFrame(), "trends": pd.DataFrame(), "twitter": pd.DataFrame()}
 
-tabelas = carregar_tabelas()
+tabelas = carregar_df_firestore()
 df_spotify, df_youtube, df_trends, df_x = tabelas["spotify"], tabelas["youtube"], tabelas["trends"], tabelas["twitter"]
 
 # Validação de colunas
