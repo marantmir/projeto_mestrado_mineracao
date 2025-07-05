@@ -18,10 +18,20 @@ try:
 except:
     st.warning("Falha ao baixar recursos do NLTK.")
 
+@st.cache_data
 def inferir_generos(df, text_column, fonte):
     try:
         stop_words = set(stopwords.words('portuguese'))
         generos = GENEROS_MUSICA if fonte == "Spotify" else GENEROS_FILMES_SERIES
+        
+        custom_generos = st.session_state.get(f"custom_{fonte}_generos", [])
+        if st.button(f"Adicionar Gêneros Personalizados para {fonte}", key=f"add_{fonte}"):
+            new_generos = st.text_input(f"Insira gêneros para {fonte} (separados por vírgula)", key=f"input_{fonte}")
+            if new_generos:
+                custom_generos.extend([g.strip() for g in new_generos.split(",") if g.strip()])
+                st.session_state[f"custom_{fonte}_generos"] = custom_generos
+                st.success("Gêneros adicionados!")
+        generos.extend(custom_generos)
         
         def detectar_genero(texto):
             texto = texto.lower()
@@ -67,7 +77,7 @@ def gerar_visoes(df_spotify, df_youtube, df_trends, df_x):
             st.plotly_chart(fig, use_container_width=True)
             st.markdown("**Insight**: Gêneros dominantes indicam preferências.")
         except Exception as e:
-            st.warning(f"Erro ao gerar visualização do Spotify: {str(e)}")
+            st.warning(f"Erro no Spotify: {str(e)}")
 
     if is_valid_df(df_youtube, "YouTube"):
         try:
@@ -81,12 +91,13 @@ def gerar_visoes(df_spotify, df_youtube, df_trends, df_x):
                 tooltip=["titulo", "genero_inferido", "visualizacoes"]
             ).properties(
                 title="Top 10 Vídeos por Visualizações e Gênero no YouTube",
-                width="container"
+                width="container",
+                description="Gráfico de barras mostrando os 10 vídeos mais vistos no YouTube por gênero."
             )
             st.altair_chart(chart, use_container_width=True)
             st.markdown("**Insight**: Vídeos de gêneros populares são tendências.")
         except Exception as e:
-            st.warning(f"Erro ao gerar visualização do YouTube: {str(e)}")
+            st.warning(f"Erro no YouTube: {str(e)}")
 
     if is_valid_df(df_trends, "Google Trends"):
         try:
@@ -108,14 +119,15 @@ def gerar_visoes(df_spotify, df_youtube, df_trends, df_x):
                     y=alt.Y(alt.repeat("column"), type="quantitative"),
                     color=alt.Color(alt.repeat("column"), type="nominal")
                 ).repeat(
-                    column=df_trends.columns[1:min(4, len(df_trends.columns))].tolist()
+                    column=[col for col in df_trends.columns if col != "date"][:min(3, len(df_trends.columns) - 1)]
                 ).properties(
                     title="Interesse ao Longo do Tempo (Google Trends)",
-                    width="container"
+                    width="container",
+                    description="Gráfico de linhas mostrando o interesse ao longo do tempo para termos do Google Trends."
                 )
                 st.altair_chart(chart, use_container_width=True)
         except Exception as e:
-            st.warning(f"Erro ao gerar visualização do Google Trends: {str(e)}")
+            st.warning(f"Erro no Google Trends: {str(e)}")
 
     if is_valid_df(df_x, "X"):
         try:
@@ -135,4 +147,4 @@ def gerar_visoes(df_spotify, df_youtube, df_trends, df_x):
             st.plotly_chart(fig, use_container_width=True)
             st.markdown("**Insight**: Gêneros com alto volume são virais.")
         except Exception as e:
-            st.warning(f"Erro ao gerar visualização do X: {str(e)}")
+            st.warning(f"Erro no X: {str(e)}")
