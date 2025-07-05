@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import logging
 
-# Configurar logging para depuração
+# Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ try:
     from insights.visualizacoes import gerar_visoes
     from insights.aprendizado import analisar_apriori, analisar_clusters
 except ImportError as e:
-    st.error(f"Erro ao importar módulos: {str(e)}. Verifique a estrutura do projeto e os arquivos no diretório 'data/' e 'insights/'.")
+    st.error(f"Erro ao importar módulos: {str(e)}. Verifique a estrutura do projeto no diretório 'data/' e 'insights/'.")
     logger.error(f"Erro de importação: {str(e)}")
     st.stop()
 
@@ -33,13 +33,13 @@ if "dados_carregados" not in st.session_state:
 if st.button("🔄 Coletar Novos Dados"):
     with st.spinner("Coletando dados de todas as plataformas..."):
         try:
-            # Coletar dados com verificação
+            # Coletar dados com tratamento de falhas
             df_spotify = coletar_dados_spotify()
             df_youtube = coletar_dados_youtube()
             df_trends = coletar_dados_trends()
             df_x = coletar_dados_x()
 
-            # Verificar se os DataFrames são válidos antes de salvar
+            # Verificar e salvar DataFrames
             dataframes = {
                 "spotify": df_spotify,
                 "youtube": df_youtube,
