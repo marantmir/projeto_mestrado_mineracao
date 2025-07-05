@@ -16,7 +16,7 @@ try:
 except ImportError as e:
     st.error(f"Erro ao importar módulos: {str(e)}. Verifique os diretórios 'data/' e 'insights/'.")
     if st.button("Mostrar Logs"):
-        st.text(logger.handlers[0].stream.getvalue())  # Exibe logs se disponível
+        st.text(logger.handlers[0].stream.getvalue())
     logger.error(f"Erro de importação: {str(e)}")
     st.stop()
 
@@ -59,23 +59,22 @@ if st.button("🔄 Coletar Novos Dados"):
             st.session_state.dados_carregados = False
 
 @st.cache_data
-def carregar_df_firestore():
+def carregar_tabelas():
     try:
         return {
-            "spotify": carregar_df_firestore("spotify"),
-            "youtube": carregar_df_firestore("youtube"),
-            "trends": carregar_df_firestore("trends"),
-            "twitter": carregar_df_firestore("twitter")
+            "spotify": carregar_df_firestore("spotify", ["nome", "artista", "popularidade"]),
+            "youtube": carregar_df_firestore("youtube", ["titulo", "canal", "visualizacoes"]),
+            "trends": carregar_df_firestore("trends", ["termo"]),
+            "twitter": carregar_df_firestore("twitter", ["assunto", "volume", "created_at"])
         }
     except Exception as e:
         st.error(f"Erro ao carregar tabelas: {str(e)}")
         logger.error(f"Erro ao carregar tabelas: {str(e)}")
         return {"spotify": pd.DataFrame(), "youtube": pd.DataFrame(), "trends": pd.DataFrame(), "twitter": pd.DataFrame()}
 
-tabelas = carregar_df_firestore()
+tabelas = carregar_tabelas()
 df_spotify, df_youtube, df_trends, df_x = tabelas["spotify"], tabelas["youtube"], tabelas["trends"], tabelas["twitter"]
 
-# Validação de colunas
 def validar_dados(df, fonte, colunas_esperadas):
     if not all(col in df.columns for col in colunas_esperadas):
         logger.warning(f"Faltam colunas em {fonte}: {colunas_esperadas}")
