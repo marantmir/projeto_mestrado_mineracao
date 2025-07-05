@@ -4,15 +4,34 @@ import pandas as pd
 import json
 import streamlit as st
 import logging
+import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def inicializar_firebase():
     if not firebase_admin._apps:
-        key_dict = json.loads(st.secrets["firebase_key"])
-        cred = credentials.Certificate(key_dict)
-        firebase_admin.initialize_app(cred)
+        try:
+            if "firebase" in st.secrets:
+                if "key" in st.secrets["firebase"]:
+                    key_dict = json.loads(st.secrets["firebase"]["key"])
+                    cred = credentials.Certificate(key_dict)
+                elif "key_path" in st.secrets["firebase"]:
+                    cred_path = st.secrets["firebase"]["key_path"]
+                    if os.path.exists(cred_path):
+                        cred = credentials.Certificate(cred_path)
+                    else:
+                        raise FileNotFoundError(f"Arquivo de credenciais não encontrado em {cred_path}")
+                else:
+                    raise KeyError("Nenhuma chave 'key' ou 'key_path' encontrada em st.secrets['firebase']")
+                firebase_admin.initialize_app(cred)
+                logger.info("Firebase inicializado com sucesso")
+            else:
+                raise KeyError("Seção 'firebase' não encontrada em st.secrets")
+        except Exception as e:
+            logger.error(f"Erro ao inicializar Firebase: {str(e)}")
+            st.error(f"Erro ao inicializar Firebase: {str(e)}. Verifique o secrets.toml ou as configurações do Streamlit Cloud.")
+            st.stop()
 
 def salvar_df_firestore(df, colecao):
     inicializar_firebase()
