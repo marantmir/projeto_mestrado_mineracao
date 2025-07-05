@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 import time
 import logging
+import requests
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +31,7 @@ def coletar_dados_trends(max_retries=3, retry_delay=5):
                 logger.info(f"Sucesso: {len(trending_df)} termos coletados")
                 return trending_df
                 
-            except pytrends.exceptions.ResponseError as e:
+            except (requests.exceptions.RequestException, Exception) as e:
                 st.error(f"Tentativa {attempt + 1}/{max_retries} falhou: {str(e)}")
                 logger.error(f"Tentativa {attempt + 1}/{max_retries} falhou: {str(e)}")
                 
@@ -38,11 +39,6 @@ def coletar_dados_trends(max_retries=3, retry_delay=5):
                     st.write(f"Aguardando {retry_delay} segundos antes da próxima tentativa...")
                     time.sleep(retry_delay)
                 continue
-            
-            except Exception as e:
-                st.error(f"Erro inesperado na tentativa {attempt + 1}/{max_retries}: {str(e)}")
-                logger.error(f"Erro inesperado na tentativa {attempt + 1}/{max_retries}: {str(e)}")
-                break
 
         st.error(
             "Não foi possível coletar dados do Google Trends após várias tentativas. "
