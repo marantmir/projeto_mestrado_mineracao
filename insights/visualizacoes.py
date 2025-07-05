@@ -1,59 +1,126 @@
 import streamlit as st
-import plotly.express as px
 import pandas as pd
+import plotly.express as px
+import altair as alt
+import logging
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def gerar_visoes(df_spotify, df_youtube, df_trends, df_x):
-    st.header("🎯 Visões por Plataforma")
+    """
+    Gera visualizações para os dados coletados, adaptando-se a DataFrames vazios.
+    """
+    st.subheader("Visualizações de Tendências Culturais")
 
-    with st.expander("🎧 Spotify"):
-        st.subheader("Top músicas e artistas")
-        fig1 = px.bar(df_spotify.head(15), x="musica", y="streams", color="artista", title="Top 15 músicas mais ouvidas")
-        st.plotly_chart(fig1)
+    # Função auxiliar para verificar DataFrame
+    def is_valid_df(df, name):
+        if not isinstance(df, pd.DataFrame):
+            logger.warning(f"{name} não é um DataFrame válido.")
+            return False
+        if df.empty:
+            logger.warning(f"{name} está vazio.")
+            return False
+        return True
 
-    with st.expander("📺 YouTube"):
-        st.subheader("Vídeos em alta no Brasil")
-        df_youtube["views"] = pd.to_numeric(df_youtube["views"])
-        fig2 = px.bar(df_youtube.sort_values("views", ascending=False).head(15), x="titulo", y="views", color="canal", title="Top vídeos")
-        st.plotly_chart(fig2)
-
-    with st.expander("📊 Google Trends"):
-        st.subheader("Principais termos pesquisados")
-        st.table(df_trends.head(20))
-
-    with st.expander("🐦 Twitter (X)"):
-        st.subheader("Tópicos em alta no Brasil")
-        df_x = df_x.dropna(subset=["volume"])
-        df_x["volume"] = pd.to_numeric(df_x["volume"])
-        fig3 = px.bar(df_x.sort_values("volume", ascending=False).head(15), x="assunto", y="volume", title="Trending Topics")
-        st.plotly_chart(fig3)
-
-    st.header("🤖 Visões Integradas e Inferências")
-
-    termos_spotify = set(df_spotify["musica"].str.lower().unique())
-    termos_youtube = set(df_youtube["titulo"].str.lower().unique())
-    termos_trends = set(df_trends["termo"].str.lower().unique())
-    termos_twitter = set(df_x["assunto"].str.lower().unique())
-
-    intersec_spotify_youtube = termos_spotify.intersection(termos_youtube)
-    intersec_yt_twitter = termos_youtube.intersection(termos_twitter)
-    intersec_all = termos_spotify & termos_youtube & termos_trends & termos_twitter
-
-    if intersec_spotify_youtube:
-        st.markdown("🔗 **Músicas/Vídeos populares nas duas plataformas:**")
-        st.write(list(intersec_spotify_youtube))
-
-    if intersec_yt_twitter:
-        st.markdown("🔥 **Temas de vídeos que também estão em alta no Twitter:**")
-        st.write(list(intersec_yt_twitter))
-
-    if intersec_all:
-        st.markdown("🚀 **Conteúdos em tendência em todas as plataformas:**")
-        st.write(list(intersec_all))
-
-    st.subheader("🧠 Recomendações baseadas nos dados")
-    if len(intersec_all) > 0:
-        st.success(f"🚨 Os conteúdos '{', '.join(list(intersec_all)[:3])}' estão em alta em todas as plataformas! Aposte neles.")
-    elif len(intersec_spotify_youtube) > 0:
-        st.info(f"🎵 Os conteúdos musicais '{', '.join(list(intersec_spotify_youtube)[:3])}' estão gerando alto engajamento cross-plataforma.")
+    # 1. Visualização Spotify: Top músicas por popularidade
+    if is_valid_df(df_spotify, "Spotify"):
+        try:
+            st.subheader("🎵 Top Músicas no Spotify (Popularidade)")
+            df_spotify_sorted = df_spotify.sort_values(by="popularidade", ascending=False).head(10)
+            fig = px.bar(
+                df_spotify_sorted,
+                x="nome",
+                y="popularidade",
+                color="artista",
+                title="Top 10 Músicas por Popularidade no Spotify",
+                labels={"nome": "Música", "popularidade": "Popularidade"},
+                color_discrete_sequence=px.colors.qualitative.Plotly
+            )
+            fig.update_layout(xaxis_title="Música", yaxis_title="Popularidade (0-100)", xaxis_tickangle=45)
+            st.plotly_chart(fig, use_container_width=True)
+            st.markdown("**Insight para produtores**: Músicas com alta popularidade são tendências fortes. Considere criar conteúdo relacionado a esses artistas ou gêneros.")
+        except Exception as e:
+            st.warning(f"Erro ao gerar visualização do Spotify: {str(e)}")
+            logger.error(f"Erro ao gerar visualização do Spotify: {str(e)}")
     else:
-        st.warning("Nenhum termo comum identificado entre todas as plataformas.")
+        st.info("Nenhum dado do Spotify disponível para visualização.")
+
+    # 2. Visualização YouTube: Top vídeos por visualizações
+    if is_valid_df(df_youtube, "YouTube"):
+        try:
+            st.subheader("📹 Top Vídeos no YouTube (Visualizações)")
+            df_youtube_sorted = df_youtube.sort_values(by="visualizacoes", ascending=False).head(10)
+            chart = alt.Chart(df_youtube_sorted).mark_bar().encode(
+                x=alt.X("titulo:N", title="Vídeo", sort=None),
+                y=alt.Y("visualizacoes:Q", title="Visualizações"),
+                color=alt.Color("canal:N", title="Canal"),
+                tooltip=["titulo", "canal", "visualizacoes"]
+            ).properties(
+                title="Top 10 Vídeos por Visualizações no YouTube",
+                width="container"
+            )
+            st.altair_chart(chart, use_container_width=True)
+            st.markdown("**Insight para produtores**: Vídeos com muitas visualizações indicam temas ou formatos populares. Explore esses tópicos para vídeos ou colaborações.")
+        except Exception as e:
+            st.warning(f"Erro ao gerar visualização do YouTube: {str(e)}")
+            logger.error(f"Erro ao gerar visualização do YouTube: {str(e)}")
+    else:
+        st.info("Nenhum dado do YouTube disponível para visualização.")
+
+    # 3. Visualização Google Trends: Termos mais pesquisados
+    if is_valid_df(df_trends, "Google Trends"):
+        try:
+            st.subheader("🔍 Termos Populares no Google Trends")
+            df_trends_sorted = df_trends.head(10)
+            if "termo" in df_trends.columns:
+                fig = px.pie(
+                    df_trends_sorted,
+                    names="termo",
+                    title="Top 10 Termos de Pesquisa no Google Trends",
+                    color_discrete_sequence=px.colors.qualitative.Pastel
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                st.markdown("**Insight para produtores**: Termos populares no Google Trends refletem o interesse atual do público. Crie conteúdo otimizado para SEO com esses termos.")
+            else:
+                # Fallback para interest_over_time
+                chart = alt.Chart(df_trends_sorted).mark_line().encode(
+                    x=alt.X("date:T", title="Data"),
+                    y=alt.Y(alt.repeat("column"), type="quantitative"),
+                    color=alt.Color(alt.repeat("column"), type="nominal")
+                ).repeat(
+                    column=df_trends.columns[1:4].tolist()  # Até 3 palavras-chave
+                ).properties(
+                    title="Interesse ao Longo do Tempo (Google Trends)",
+                    width="container"
+                )
+                st.altair_chart(chart, use_container_width=True)
+                st.markdown("**Insight para produtores**: Picos de interesse indicam momentos ideais para publicar conteúdo relacionado a esses temas.")
+        except Exception as e:
+            st.warning(f"Erro ao gerar visualização do Google Trends: {str(e)}")
+            logger.error(f"Erro ao gerar visualização do Google Trends: {str(e)}")
+    else:
+        st.info("Nenhum dado do Google Trends disponível para visualização.")
+
+    # 4. Visualização X: Assuntos mais discutidos
+    if is_valid_df(df_x, "X"):
+        try:
+            st.subheader("🐦 Assuntos Populares no X")
+            df_x_sorted = df_x.sort_values(by="volume", ascending=False).head(10)
+            fig = px.bar(
+                df_x_sorted,
+                x="assunto",
+                y="volume",
+                title="Top 10 Assuntos no X por Volume de Impressões",
+                labels={"assunto": "Assunto", "volume": "Impressões"},
+                color_discrete_sequence=px.colors.qualitative.Bold
+            )
+            fig.update_layout(xaxis_title="Assunto", yaxis_title="Impressões", xaxis_tickangle=45)
+            st.plotly_chart(fig, use_container_width=True)
+            st.markdown("**Insight para produtores**: Assuntos com alto volume no X são virais. Crie posts ou threads explorando esses temas para engajamento.")
+        except Exception as e:
+            st.warning(f"Erro ao gerar visualização do X: {str(e)}")
+            logger.error(f"Erro ao gerar visualização do X: {str(e)}")
+    else:
+        st.info("Nenhum dado do X disponível para visualização.")
