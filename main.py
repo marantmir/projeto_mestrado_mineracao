@@ -2,11 +2,9 @@ import streamlit as st
 import pandas as pd
 import logging
 
-# Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Importações com tratamento de erros
 try:
     from data.spotify_data import coletar_dados_spotify
     from data.youtube_data import coletar_dados_youtube
@@ -16,99 +14,101 @@ try:
     from insights.visualizacoes import gerar_visoes
     from insights.aprendizado import analisar_apriori, analisar_clusters
 except ImportError as e:
-    st.error(f"Erro ao importar módulos: {str(e)}. Verifique a estrutura do projeto no diretório 'data/' e 'insights/'.")
+    st.error(f"Erro ao importar módulos: {str(e)}. Verifique os diretórios 'data/' e 'insights/'.")
+    if st.button("Mostrar Logs"):
+        st.text(logger.handlers[0].stream.getvalue())  # Exibe logs se disponível
     logger.error(f"Erro de importação: {str(e)}")
     st.stop()
 
-# Configuração da página
 st.set_page_config(page_title="Radar Cultural Inteligente", layout="wide")
 st.title("🎧 Radar Cultural Inteligente")
 st.markdown("Análise automatizada de tendências culturais com IA aplicada.")
 
-# Inicializar estado da sessão
 if "dados_carregados" not in st.session_state:
     st.session_state.dados_carregados = False
 
-# Botão para coletar novos dados
 if st.button("🔄 Coletar Novos Dados"):
     with st.spinner("Coletando dados de todas as plataformas..."):
         try:
-            # Coletar dados com tratamento de erros
             df_spotify = coletar_dados_spotify()
             df_youtube = coletar_dados_youtube()
             df_trends = coletar_dados_trends()
             df_x = coletar_dados_x()
 
-            # Verificar e salvar DataFrames
-            dataframes = {
-                "spotify": df_spotify,
-                "youtube": df_youtube,
-                "trends": df_trends,
-                "twitter": df_x
-            }
+            dataframes = {"spotify": df_spotify, "youtube": df_youtube, "trends": df_trends, "twitter": df_x}
             all_valid = True
             for name, df in dataframes.items():
                 if not isinstance(df, pd.DataFrame):
-                    st.error(f"Falha ao coletar dados de {name}: Dados retornados não são um DataFrame.")
-                    logger.error(f"Falha ao coletar dados de {name}: Dados retornados não são um DataFrame.")
+                    st.error(f"Falha ao coletar dados de {name}: Dados inválidos.")
                     all_valid = False
                 elif df.empty:
-                    st.warning(f"Dados de {name} estão vazios. Verifique as credenciais da API ou a conexão.")
-                    logger.warning(f"Dados de {name} estão vazios.")
+                    st.warning(f"Dados de {name} estão vazios. Verifique APIs ou conexão.")
                 else:
                     salvar_df_em_tabela(df, name)
-                    st.success(f"Dados de {name} salvos com sucesso: {len(df)} registros.")
-                    logger.info(f"Dados de {name} salvos com sucesso: {len(df)} registros.")
-
+                    st.success(f"Dados de {name} salvos: {len(df)} registros.")
             if all_valid:
                 st.session_state.dados_carregados = True
-                st.success("✅ Todos os dados foram coletados e salvos com sucesso!")
+                st.success("✅ Dados coletados e salvos!")
             else:
-                st.session_state.dados_carregados = True  # Permitir visualizações mesmo com falhas parciais
-                st.warning("Alguns dados não foram coletados corretamente. Visualizações serão geradas com dados disponíveis.")
-
+                st.session_state.dados_carregados = True
+                st.warning("Alguns dados falharam. Visualizações com dados disponíveis.")
         except Exception as e:
-            st.error(f"Erro durante a coleta de dados: {str(e)}")
-            logger.error(f"Erro durante a coleta de dados: {str(e)}")
+            st.error(f"Erro na coleta: {str(e)}. Verifique logs para detalhes.")
+            if st.button("Mostrar Logs"):
+                st.text(logger.handlers[0].stream.getvalue())
             st.session_state.dados_carregados = False
 
-# Carregamento seguro dos dados
-try:
-    df_spotify = carregar_tabela("spotify")
-    df_youtube = carregar_tabela("youtube")
-    df_trends = carregar_tabela("trends")
-    df_x = carregar_tabela("twitter")
-except Exception as e:
-    st.error(f"Erro ao carregar tabelas: {str(e)}. Verifique a conexão com o banco de dados.")
-    logger.error(f"Erro ao carregar tabelas: {str(e)}")
-    df_spotify = pd.DataFrame()
-    df_youtube = pd.DataFrame()
-    df_trends = pd.DataFrame()
-    df_x = pd.DataFrame()
+@st.cache_data
+def carregar_tabelas():
+    try:
+        return {
+            "spotify": carregar_tabela("spotify"),
+            "youtube": carregar_tabela("youtube"),
+            "trends": carregar_tabela("trends"),
+            "twitter": carregar_tabela("twitter")
+        }
+    except Exception as e:
+        st.error(f"Erro ao carregar tabelas: {str(e)}")
+        logger.error(f"Erro ao carregar tabelas: {str(e)}")
+        return {"spotify": pd.DataFrame(), "youtube": pd.DataFrame(), "trends": pd.DataFrame(), "twitter": pd.DataFrame()}
 
-# Exibir dados carregados
+tabelas = carregar_tabelas()
+df_spotify, df_youtube, df_trends, df_x = tabelas["spotify"], tabelas["youtube"], tabelas["trends"], tabelas["twitter"]
+
+# Validação de colunas
+def validar_dados(df, fonte, colunas_esperadas):
+    if not all(col in df.columns for col in colunas_esperadas):
+        logger.warning(f"Faltam colunas em {fonte}: {colunas_esperadas}")
+        return False
+    return True
+
+if not (validar_dados(df_spotify, "Spotify", ["nome", "artista", "popularidade"]) and
+        validar_dados(df_youtube, "YouTube", ["titulo", "canal", "visualizacoes"]) and
+        validar_dados(df_trends, "Google Trends", ["termo"]) and
+        validar_dados(df_x, "X", ["assunto", "volume", "created_at"])):
+    st.warning("Dados carregados podem estar incompletos. Verifique a coleta.")
+
 st.header("📊 Dados Coletados")
 for table, df in [("Spotify", df_spotify), ("YouTube", df_youtube), ("Google Trends", df_trends), ("X", df_x)]:
     st.subheader(table)
     if isinstance(df, pd.DataFrame) and not df.empty:
         st.dataframe(df)
     else:
-        st.info(f"Sem dados disponíveis para {table}. Clique em '🔄 Coletar Novos Dados' para tentar novamente.")
+        st.info(f"Sem dados para {table}. Clique em '🔄 Coletar Novos Dados'.")
 
-# Gerar visualizações mesmo com dados parciais
 if st.session_state.dados_carregados:
     try:
         st.header("📈 Visualizações e Insights")
         gerar_visoes(df_spotify, df_youtube, df_trends, df_x)
 
-        # Análises avançadas apenas se houver dados suficientes
         if isinstance(df_trends, pd.DataFrame) and not df_trends.empty and isinstance(df_x, pd.DataFrame) and not df_x.empty:
             st.header("🧠 Análises Avançadas com IA")
             analisar_apriori(df_trends, df_x)
         if isinstance(df_spotify, pd.DataFrame) and not df_spotify.empty and isinstance(df_youtube, pd.DataFrame) and not df_youtube.empty:
             analisar_clusters(df_spotify, df_youtube)
     except Exception as e:
-        st.error(f"Erro ao gerar visualizações ou análises: {str(e)}")
-        logger.error(f"Erro ao gerar visualizações ou análises: {str(e)}")
+        st.error(f"Erro em visualizações/análises: {str(e)}. Verifique logs.")
+        if st.button("Mostrar Logs"):
+            st.text(logger.handlers[0].stream.getvalue())
 else:
-    st.info("Clique em '🔄 Coletar Novos Dados' para iniciar as análises.")
+    st.info("Clique em '🔄 Coletar Novos Dados' para iniciar.")
