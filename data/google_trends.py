@@ -15,8 +15,8 @@ def coletar_dados_trends(max_retries=3, retry_delay=5):
     Implementa retentativas para lidar com limites de taxa ou erros intermitentes.
     """
     try:
-        # Inicializar pytrends com fuso horário correto para o Brasil (UTC-3)
-        pytrends = TrendReq(hl='pt-BR', tz=-180, retries=0, backoff_factor=0.1)
+        # Inicializar pytrends sem retries internos para evitar conflitos
+        pytrends = TrendReq(hl='pt-BR', tz=-180)
         
         for attempt in range(max_retries):
             try:
