@@ -76,14 +76,17 @@ tabelas = carregar_tabelas()
 df_spotify, df_youtube, df_trends, df_x = tabelas["spotify"], tabelas["youtube"], tabelas["trends"], tabelas["twitter"]
 
 def validar_dados(df, fonte, colunas_esperadas):
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        logger.warning(f"Dados de {fonte} estão vazios ou inválidos")
+        return False
     if not all(col in df.columns for col in colunas_esperadas):
         logger.warning(f"Faltam colunas em {fonte}: {colunas_esperadas}")
         return False
     return True
 
-if not (validar_dados(df_spotify, "Spotify", ["nome", "artista", "popularidade"]) and
-        validar_dados(df_youtube, "YouTube", ["titulo", "canal", "visualizacoes"]) and
-        validar_dados(df_trends, "Google Trends", ["termo"]) and
+if not (validar_dados(df_spotify, "Spotify", ["nome", "artista", "popularidade"]) or
+        validar_dados(df_youtube, "YouTube", ["titulo", "canal", "visualizacoes"]) or
+        validar_dados(df_trends, "Google Trends", ["termo"]) or
         validar_dados(df_x, "X", ["assunto", "volume", "created_at"])):
     st.warning("Dados carregados podem estar incompletos. Verifique a coleta.")
 
@@ -91,23 +94,73 @@ st.header("📊 Dados Coletados")
 for table, df in [("Spotify", df_spotify), ("YouTube", df_youtube), ("Google Trends", df_trends), ("X", df_x)]:
     st.subheader(table)
     if isinstance(df, pd.DataFrame) and not df.empty:
-        st.dataframe(df)
+        st.dataframe(df.head(10))  # Mostrar apenas 10 linhas para legibilidade
     else:
         st.info(f"Sem dados para {table}. Clique em '🔄 Coletar Novos Dados'.")
 
 if st.session_state.dados_carregados:
     try:
         st.header("📈 Visualizações e Insights")
-        gerar_visoes(df_spotify, df_youtube, df_trends, df_x)
+        if validar_dados(df_spotify, "Spotify", ["nome", "artista", "popularidade"]) or \
+           validar_dados(df_youtube, "YouTube", ["titulo", "canal", "visualizacoes"]) or \
+           validar_dados(df_trends, "Google Trends", ["termo"]) or \
+           validar_dados(df_x, "X", ["assunto", "volume", "created_at"]):
+            gerar_visoes(df_spotify, df_youtube, df_trends, df_x)
+        else:
+            st.warning("Sem dados válidos para gerar visualizações.")
 
-        if isinstance(df_trends, pd.DataFrame) and not df_trends.empty and isinstance(df_x, pd.DataFrame) and not df_x.empty:
-            st.header("🧠 Análises Avançadas com IA")
+        if validar_dados(df_trends, "Google Trends", ["termo"]) and validar_dados(df_x, "X", ["assunto", "volume", "created_at"]):
+            st.subheader("🧠 Análise de Regras de Associação (Apriori)")
             analisar_apriori(df_trends, df_x)
-        if isinstance(df_spotify, pd.DataFrame) and not df_spotify.empty and isinstance(df_youtube, pd.DataFrame) and not df_youtube.empty:
+        else:
+            st.warning("Sem dados suficientes para análise Apriori.")
+
+        if validar_dados(df_spotify, "Spotify", ["nome", "artista", "popularidade"]) and \
+           validar_dados(df_youtube, "YouTube", ["titulo", "canal", "visualizacoes"]):
+            st.subheader("🧠 Análise de Clusters")
             analisar_clusters(df_spotify, df_youtube)
+        else:
+            st.warning("Sem dados suficientes para análise de clusters.")
     except Exception as e:
         st.error(f"Erro em visualizações/análises: {str(e)}. Verifique logs.")
         if st.button("Mostrar Logs"):
             st.text(logger.handlers[0].stream.getvalue())
+
+    # Pesquisa Operacional para Recomendação de Conteúdo
+    st.header("🤖 Recomendações para Produção de Conteúdo")
+    if not df_spotify.empty and not df_youtube.empty and not df_trends.empty and not df_x.empty:
+        # Normalizar popularidade (0-100) e volume (ponderar por tendência)
+        df_spotify['score'] = df_spotify['popularidade']
+        df_youtube['score'] = df_youtube['visualizacoes'] / 1000  # Aproximar escala
+        df_trends_weight = df_trends['termo'].value_counts().head(10).to_dict()
+        df_x_weight = df_x['assunto'].value_counts().head(10).to_dict()
+
+        # Combinar scores com pesos de tendências
+        recommendations = {}
+        for idx, row in df_spotify.iterrows():
+            termo = row['nome']
+            score = row['score'] * 0.5  # Peso para popularidade
+            if termo in df_trends_weight:
+                score += df_trends_weight[termo] * 0.3  # Peso para tendências
+            if termo in df_x_weight:
+                score += df_x_weight[termo] * 0.2  # Peso para volume no X
+            recommendations[termo] = score
+
+        for idx, row in df_youtube.iterrows():
+            termo = row['titulo']
+            score = row['score'] * 0.5
+            if termo in df_trends_weight:
+                score += df_trends_weight[termo] * 0.3
+            if termo in df_x_weight:
+                score += df_x_weight[termo] * 0.2
+            recommendations[termo] = score
+
+        # Ordenar e exibir top 5 recomendações
+        top_recommendations = sorted(recommendations.items(), key=lambda x: x[1], reverse=True)[:5]
+        st.subheader("Top 5 Conteúdos Sugeridos")
+        for conteudo, score in top_recommendations:
+            st.write(f"- {conteudo} (Pontuação: {score:.2f})")
+    else:
+        st.warning("Sem dados suficientes para recomendar conteúdo.")
 else:
     st.info("Clique em '🔄 Coletar Novos Dados' para iniciar.")
